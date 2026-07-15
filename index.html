@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 智能点菜系统 (云端一体化生产版)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s ease; }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
+        [v-cloak] { display: none !important; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+    <div id="app" v-cloak class="max-w-md mx-auto bg-white min-h-screen shadow-xl relative pb-24">
+        
+        <!-- 全局加载遮罩 -->
+        <div v-if="isLoading" class="loading-overlay">
+            <div class="spinner mb-4"></div>
+            <h2 class="text-xl font-bold text-gray-900">Gemini 正在翻译菜单与货币...</h2>
+            <p class="text-sm text-gray-500 mt-2 text-center px-6">正在智能构建符合中国胃的直觉分类</p>
+        </div>
+
+        <!-- 主界面 -->
+        <div>
+            <div class="sticky top-0 bg-white z-40 shadow-sm pt-4 pb-2 px-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h1 class="text-xl font-black text-gray-900">智能点菜系统</h1>
+                    <div class="flex gap-1 items-center">
+                        <button class="text-gray-500 p-2 hover:bg-gray-100 rounded-full transition" @click="openLoadModal" title="读取历史菜单">
+                            <i class="fas fa-folder-open"></i>
+                        </button>
+                        <button class="text-blue-600 p-2 hover:bg-blue-50 rounded-full transition" @click="openSaveModal" title="保存当前菜单">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white p-2 px-3 rounded-full shadow-md text-sm font-bold transition ml-1" @click="uploadImage">
+                            <i class="fas fa-camera"></i> 拍菜单
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 极简一字型微创汇率转换条 -->
+                <div class="flex items-center justify-between bg-gray-900 text-white px-3 py-1.5 rounded-lg text-xs mb-3 shadow-sm font-medium">
+                    <div class="flex items-center gap-1">
+                        <span class="text-gray-400">菜单原币:</span>
+                        <select v-model="origCurrency" @change="isAiAutoDetected = false" class="bg-transparent font-bold text-white focus:outline-none cursor-pointer">
+                            <option class="text-gray-900" v-for="(symbol, code) in currencyMap" :key="code" :value="code">{{ code }} ({{ symbol }})</option>
+                        </select>
+                        <span class="text-[9px] bg-blue-500 text-white px-1 rounded-sm scale-90" v-if="isAiAutoDetected">AI</span>
+                    </div>
+                    <div class="text-gray-600 text-[10px]"><i class="fas fa-exchange-alt"></i></div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-gray-400">折算显示:</span>
+                        <select v-model="targetCurrency" class="bg-transparent font-bold text-yellow-400 focus:outline-none cursor-pointer">
+                            <option class="text-gray-900" v-for="(symbol, code) in currencyMap" :key="code" :value="code">{{ code }} ({{ symbol }})</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="relative mb-2">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                    <input type="text" v-model="searchQuery" placeholder="搜索翻译后的菜名或食材..." 
+                           class="w-full bg-gray-100 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <!-- 动态分类标签栏 -->
+            <div class="overflow-x-auto no-scrollbar whitespace-nowrap px-4 py-2 border-b border-gray-100 sticky top-[152px] bg-white z-30 shadow-sm" v-if="categories.length > 0">
+                <button @click="activeCategory = 'AI推荐'; searchQuery = ''"
+                        :class="['px-4 py-1.5 rounded-full text-sm font-bold mr-2 transition-colors border', 
+                                 activeCategory === 'AI推荐' && !searchQuery ? 'bg-gradient-to-r from-orange-400 to-red-500 text-white border-transparent shadow-md' : 'bg-orange-50 text-orange-600 border-orange-200']">
+                    <i class="fas fa-fire mr-1"></i> AI 必吃推荐
+                </button>
+                <button v-for="cat in categories" :key="cat" 
+                        @click="activeCategory = cat; searchQuery = ''"
+                        :class="['px-4 py-1.5 rounded-full text-sm font-medium mr-2 transition-colors border', 
+                                 activeCategory === cat && !searchQuery ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-600 border-gray-200']">
+                    {{ cat }}
+                </button>
+            </div>
+
+            <!-- 菜品列表区 -->
+            <div class="p-4 space-y-4">
+                <div v-if="displayMenu.length === 0" class="text-center py-10 text-gray-400">
+                    <i class="fas fa-receipt text-4xl mb-3"></i>
+                    <p>菜单空空如也</p>
+                    <p class="text-xs mt-1">请点击右上角「拍菜单」体验智能翻译</p>
+                </div>
+
+                <div v-for="item in displayMenu" :key="item.id" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
+                    <!-- AI推荐理由气泡 -->
+                    <div v-if="item.isAiRecommended && (activeCategory === 'AI推荐' || searchQuery)" class="mb-2 bg-orange-50 border border-orange-100 p-2 rounded-lg flex items-start gap-2">
+                        <i class="fas fa-magic text-orange-500 mt-0.5"></i>
+                        <p class="text-xs text-orange-800 leading-tight"><span class="font-bold">AI推荐理由：</span>{{ item.aiReason }}</p>
+                    </div>
+
+                    <!-- 布局调整：加入左侧实拍缩略图 -->
+                    <div class="flex gap-3 items-start">
+                        <div v-if="item.userPhotos && item.userPhotos.length > 0" 
+                             class="w-16 h-16 bg-cover bg-center rounded-lg border border-gray-100 flex-shrink-0 shadow-sm cursor-pointer"
+                             :style="{ backgroundImage: 'url(' + item.userPhotos[0] + ')' }"
+                             @click="openRatingModal(item)">
+                        </div>
+                        
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="font-bold text-gray-900 text-lg leading-tight">{{ item.nameZh }}</h3>
+                                <button @click="openRatingModal(item)" class="text-[10px] flex items-center gap-1 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded text-gray-600 transition">
+                                    <span v-if="item.rating > 0" class="text-yellow-500 font-bold"><i class="fas fa-star"></i> {{item.rating}}</span>
+                                    <span v-else><i class="far fa-thumbs-up"></i> 点赞/实拍</span>
+                                    <i class="fas fa-camera text-blue-500 text-[9px]" v-if="item.userPhotos && item.userPhotos.length > 0"></i>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1 uppercase font-mono">原文: {{ item.nameOrig }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-end mt-3 border-t border-dashed border-gray-100 pt-3">
+                        <div>
+                            <div class="text-xl font-black text-red-500">
+                                <span class="text-sm mr-0.5">{{ currencyMap[targetCurrency] }}</span>{{ formatConvertedPrice(item.priceOriginal) }}
+                            </div>
+                            <div class="text-[10px] text-gray-400 font-mono mt-0.5">
+                                原币对照: {{ currencyMap[origCurrency] }}{{ item.priceOriginal.toFixed(2) }}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div v-if="getCartQty(item.id) > 0" class="flex items-center gap-3">
+                                <button @click="removeFromCart(item.id)" class="w-8 h-8 rounded-full border border-gray-300 text-gray-600 flex items-center justify-center">
+                                    <i class="fas fa-minus text-xs"></i>
+                                </button>
+                                <span class="font-bold w-4 text-center">{{ getCartQty(item.id) }}</span>
+                                <button @click="addToCart(item)" class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm">
+                                    <i class="fas fa-plus text-xs"></i>
+                                </button>
+                            </div>
+                            <button v-else @click="addToCart(item)" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部结算悬浮条 -->
+            <transition name="slide-up">
+                <div v-if="cartTotalQty > 0" class="fixed bottom-4 left-0 right-0 max-w-md mx-auto px-4 z-40">
+                    <div class="bg-gray-900 rounded-2xl p-3 px-4 flex justify-between items-center shadow-2xl text-white">
+                        <div class="flex items-center gap-3 flex-1" @click="showCheckout = true">
+                            <div class="relative">
+                                <i class="fas fa-receipt text-2xl text-white"></i>
+                                <span class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-gray-900">
+                                    {{ cartTotalQty }}
+                                </span>
+                            </div>
+                            <div>
+                                <div class="font-bold text-lg text-yellow-300">{{ currencyMap[targetCurrency] }} {{ cartTotalPrice }}</div>
+                            </div>
+                        </div>
+                        <button @click="showCheckout = true" class="bg-blue-500 hover:bg-blue-600 px-5 py-2 rounded-xl font-bold transition-colors text-sm">
+                            清单明细
+                        </button>
+                    </div>
+                </div>
+            </transition>
+        </div>
+
+        <!-- 用户实拍与评价弹窗 -->
+        <transition name="fade">
+            <div v-if="activeRatingItem" class="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+                <div class="bg-white w-full max-w-sm rounded-2xl p-5 relative shadow-2xl">
+                    <button @click="activeRatingItem = null" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>
+                    <h2 class="text-xl font-bold mb-1 pr-6">{{ activeRatingItem.nameZh }}</h2>
+                    <p class="text-xs text-gray-400 uppercase font-mono truncate">{{ activeRatingItem.nameOrig }}</p>
+                    
+                    <div class="flex items-center gap-2 mb-6 mt-5 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                        <span class="font-bold text-sm text-gray-700">给菜品点赞打分：</span>
+                        <div class="flex gap-1">
+                            <i v-for="star in 5" :key="star" @click="activeRatingItem.rating = star"
+                               :class="['fas fa-star text-xl cursor-pointer transition', star <= activeRatingItem.rating ? 'text-yellow-400 scale-110' : 'text-gray-200']"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <h3 class="font-bold text-sm text-gray-700 mb-2"><i class="fas fa-camera text-blue-500 mr-1"></i> 现场吃货实拍 (将生成菜品缩略图)</h3>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div v-for="(photo, index) in activeRatingItem.userPhotos" :key="index" 
+                                 class="aspect-square bg-gray-100 rounded-lg bg-cover bg-center border relative"
+                                 :style="{ backgroundImage: 'url(' + photo + ')' }">
+                                <button @click="removePhoto(index)" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow"><i class="fas fa-times"></i></button>
+                            </div>
+                            <label class="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-50 transition">
+                                <i class="fas fa-plus text-xl mb-1"></i><span class="text-[10px]">拍照/相册</span>
+                                <input type="file" multiple accept="image/*" class="hidden" @change="handleFileUpload">
+                            </label>
+                        </div>
+                    </div>
+                    <button @click="activeRatingItem = null" class="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold mt-4 shadow-lg transition">收起并保存配置</button>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 存储配置模态弹窗 -->
+        <transition name="fade">
+            <div v-if="showSaveModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" @click.self="showSaveModal = false">
+                <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl">
+                    <h2 class="text-lg font-bold mb-3 text-gray-900"><i class="fas fa-save text-blue-600 mr-2"></i>保存点菜配置</h2>
+                    <input type="text" v-model="tempSaveName" placeholder="如: 伦敦意式小馆" class="w-full bg-gray-100 border border-gray-300 rounded-xl p-3 text-base font-bold focus:outline-none mb-4">
+                    <div class="flex gap-3">
+                        <button @click="showSaveModal = false" class="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-sm">取消</button>
+                        <button @click="confirmSaveLocally" class="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-md">确认保存</button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 读取配置模态弹窗 -->
+        <transition name="fade">
+            <div v-if="showLoadModal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" @click.self="showLoadModal = false">
+                <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl max-h-[80vh] flex flex-col">
+                    <h2 class="text-lg font-bold mb-3 text-gray-900"><i class="fas fa-folder-open text-gray-500 mr-2"></i>选择历史菜单</h2>
+                    <div class="flex-1 overflow-y-auto space-y-2 mb-4 pr-1">
+                        <div v-if="savedFileList.length === 0" class="text-center py-8 text-gray-400 text-sm">暂无本地存储文件</div>
+                        <div v-for="fileKey in savedFileList" :key="fileKey" class="flex justify-between items-center p-3 bg-gray-50 hover:bg-blue-50 border border-gray-200 rounded-xl transition cursor-pointer" @click="loadSelectedFile(fileKey)">
+                            <div class="font-bold text-gray-800 text-sm truncate flex-1"><i class="fas fa-utensils text-blue-500 mr-2"></i>{{ fileKey }}</div>
+                            <button @click.stop="deleteSavedFile(fileKey)" class="text-red-400 hover:text-red-600 p-1 text-xs"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <button @click="showLoadModal = false" class="w-full bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-sm">关闭</button>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 确认明细弹窗 -->
+        <transition name="fade">
+            <div v-if="showCheckout" class="fixed inset-0 bg-white z-[60] flex flex-col max-w-md mx-auto">
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50 sticky top-0">
+                    <button @click="showCheckout = false" class="text-gray-500 p-2"><i class="fas fa-arrow-left"></i> 返回修改</button>
+                    <h2 class="font-bold text-lg">确认点菜清单</h2>
+                    <div class="w-16"></div>
+                </div>
+                <div class="flex-1 overflow-y-auto p-5 pb-24 space-y-4">
+                    <div v-for="item in cart" :key="item.id" class="border-b border-gray-100 pb-3 flex justify-between items-center">
+                        <div>
+                            <h4 class="font-bold text-gray-900">{{ item.nameZh }}</h4>
+                            <p class="text-xs text-gray-400 font-mono">{{ item.nameOrig }} x{{ item.qty }}</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-gray-900">{{ currencyMap[targetCurrency] }} {{ (item.qty * item.priceOriginal * getExchangeRate(origCurrency, targetCurrency)).toFixed(2) }}</div>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t-2 border-gray-200 flex justify-between items-end">
+                        <span class="text-gray-900 font-black text-xl">预计总金额</span>
+                        <span class="text-3xl font-black text-red-500">{{ currencyMap[targetCurrency] }} {{ cartTotalPrice }}</span>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const isLoading = ref(false);
+                const searchQuery = ref('');
+                const activeCategory = ref('AI推荐');
+                const mockMenu = ref([]);
+                const cart = ref([]);
+                const showCheckout = ref(false);
+
+                const showSaveModal = ref(false);
+                const showLoadModal = ref(false);
+                const tempSaveName = ref('');
+                const savedFileList = ref([]);
+                const restaurantName = ref('');
+
+                const origCurrency = ref('USD');    
+                const targetCurrency = ref('CNY');  
+                const isAiAutoDetected = ref(false); 
+
+                const activeRatingItem = ref(null);
+
+                const currencyMap = {
+                    USD: '$', EUR: '€', GBP: '£', INR: '₹', CNY: '¥', TWD: 'NT$'
+                };
+
+                const baseRatesToUSD = {
+                    USD: 1.0, EUR: 0.92, GBP: 0.78, INR: 83.5, CNY: 7.25, TWD: 32.4
+                };
+
+                const refreshFileList = () => {
+                    let list = [];
+                    for(let i=0; i<localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if(key && key.startsWith('SmartMenu_File_')) {
+                            list.push(key.replace('SmartMenu_File_', ''));
+                        }
+                    }
+                    savedFileList.value = list;
+                };
+
+                onMounted(() => { 
+                    refreshFileList(); 
+                });
+
+                const getExchangeRate = (from, to) => {
+                    return (baseRatesToUSD[to] || 1) / (baseRatesToUSD[from] || 1);
+                };
+
+                const formatConvertedPrice = (priceOriginal) => {
+                    return (priceOriginal * getExchangeRate(origCurrency.value, targetCurrency.value)).toFixed(2);
+                };
+
+                const categories = computed(() => {
+                    const set = new Set();
+                    mockMenu.value.forEach(item => { if (item.category) set.add(item.category); });
+                    return Array.from(set);
+                });
+
+                const displayMenu = computed(() => {
+                    let result = mockMenu.value;
+                    if (searchQuery.value.trim() !== '') {
+                        const q = searchQuery.value.trim().toLowerCase();
+                        return result.filter(item => item.nameZh.includes(q) || item.nameOrig.toLowerCase().includes(q));
+                    }
+                    if (activeCategory.value === 'AI推荐') return result.filter(item => item.isAiRecommended);
+                    return result.filter(item => item.category === activeCategory.value);
+                });
+
+                const addToCart = (item) => {
+                    const existing = cart.value.find(i => i.id === item.id);
+                    if (existing) existing.qty++; else cart.value.push({ ...item, qty: 1 });
+                };
+
+                const removeFromCart = (id) => {
+                    const idx = cart.value.findIndex(i => i.id === id);
+                    if (idx > -1) {
+                        cart.value[idx].qty--;
+                        if (cart.value[idx].qty <= 0) cart.value.splice(idx, 1);
+                    }
+                };
+
+                const getCartQty = (id) => { 
+                    const item = cart.value.find(i => i.id === id); 
+                    return item ? item.qty : 0; 
+                };
+                
+                const cartTotalQty = computed(() => cart.value.reduce((sum, i) => sum + i.qty, 0));
+                
+                const cartTotalPrice = computed(() => {
+                    const rate = getExchangeRate(origCurrency.value, targetCurrency.value);
+                    const total = cart.value.reduce((sum, item) => sum + (item.priceOriginal * item.qty), 0);
+                    return (total * rate).toFixed(2);
+                });
+
+                const openRatingModal = (item) => { 
+                    activeRatingItem.value = item; 
+                };
+                const removePhoto = (index) => { 
+                    if(activeRatingItem.value && activeRatingItem.value.userPhotos) {
+                        activeRatingItem.value.userPhotos.splice(index, 1); 
+                    }
+                };
+                const handleFileUpload = (event) => {
+                    const files = event.target.files;
+                    if (!files.length) return;
+                    for(let file of files) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            if(activeRatingItem.value) {
+                                if(!activeRatingItem.value.userPhotos) activeRatingItem.value.userPhotos = [];
+                                activeRatingItem.value.userPhotos.push(e.target.result);
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+
+                const openSaveModal = () => { 
+                    tempSaveName.value = restaurantName.value || ''; 
+                    showSaveModal.value = true; 
+                };
+                
+                const confirmSaveLocally = () => {
+                    const fileName = tempSaveName.value.trim();
+                    if(!fileName) return alert('名称不能为空');
+                    localStorage.setItem('SmartMenu_File_' + fileName, JSON.stringify({
+                        menu: mockMenu.value, currency: origCurrency.value, restaurantName: fileName
+                    }));
+                    restaurantName.value = fileName; 
+                    showSaveModal.value = false; 
+                    refreshFileList();
+                    alert('✅ 包含评价与实拍图的菜单已成功保存！');
+                };
+
+                const openLoadModal = () => { 
+                    refreshFileList(); 
+                    showLoadModal.value = true; 
+                };
+                
+                const loadSelectedFile = (fileKey) => {
+                    const savedStr = localStorage.getItem('SmartMenu_File_' + fileKey);
+                    if (savedStr) {
+                        const saved = JSON.parse(savedStr);
+                        mockMenu.value = saved.menu || []; 
+                        origCurrency.value = saved.currency || 'USD';
+                        restaurantName.value = saved.restaurantName || fileKey;
+                        cart.value = []; 
+                        showLoadModal.value = false;
+                        activeCategory.value = 'AI推荐';
+                        alert(`📂 [${fileKey}] 历史账单及实拍图装载完毕`);
+                    }
+                };
+                
+                const deleteSavedFile = (fileKey) => { 
+                    if(confirm('确定删除吗？')) { 
+                        localStorage.removeItem('SmartMenu_File_' + fileKey); 
+                        refreshFileList(); 
+                    } 
+                };
+
+                const uploadImage = async () => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; 
+                    input.accept = 'image/*'; 
+                    input.multiple = true;
+                    input.onchange = async (e) => {
+                        const files = e.target.files; 
+                        if (!files.length) return;
+                        isLoading.value = true;
+                        const formData = new FormData();
+                        for (let file of files) { formData.append('files', file); }
+                        try {
+                            // 👑 核心优化：改为了相对路径，上云之后网页能自动找到同域下的后端服务
+                            const res = await fetch('/api/parse-menu', { method: 'POST', body: formData });
+                            const result = await res.json();
+                            if (result.status === 'success') {
+                                let rawText = result.data.replace(/```json/g, '').replace(/```/g, '').trim();
+                                const parsedData = JSON.parse(rawText);
+                                
+                                if (parsedData.detectedCurrency && currencyMap[parsedData.detectedCurrency]) {
+                                    origCurrency.value = parsedData.detectedCurrency; 
+                                    isAiAutoDetected.value = true;
+                                }
+
+                                let formattedMenu = []; 
+                                let idx = 0;
+                                for (let catKey in parsedData.menu) {
+                                    const val = parsedData.menu[catKey];
+                                    if (Array.isArray(val)) {
+                                        val.forEach((dish) => {
+                                            formattedMenu.push({
+                                                id: 'ai_' + Date.now() + '_' + idx++,
+                                                category: catKey,
+                                                nameZh: dish.nameZh || '未知菜品',
+                                                nameOrig: dish.nameOrig || '',
+                                                priceOriginal: Number(dish.priceOriginal) || 0,
+                                                tags: dish.tags || [],
+                                                isAiRecommended: !!dish.isAiRecommended,
+                                                aiReason: dish.aiReason || '',
+                                                rating: 0,        
+                                                userPhotos: []    
+                                            });
+                                        });
+                                    }
+                                }
+                                mockMenu.value = formattedMenu;
+                                const hasRecs = formattedMenu.some(i => i.isAiRecommended);
+                                activeCategory.value = hasRecs ? 'AI推荐' : (categories.value[0] || '');
+                                alert('🎉 动态中式具体分类构建成功！');
+                            }
+                        } catch (err) { 
+                            console.error(err); 
+                            alert('⚠️ 解析异常，请检查终端日志。'); 
+                        } finally { 
+                            isLoading.value = false; 
+                        }
+                    };
+                    input.click();
+                };
+
+                return {
+                    isLoading, searchQuery, activeCategory, categories, displayMenu,
+                    cart, addToCart, removeFromCart, getCartQty, cartTotalQty, cartTotalPrice,
+                    uploadImage, origCurrency, targetCurrency, currencyMap, getExchangeRate,
+                    formatConvertedPrice, showCheckout, isAiAutoDetected,
+                    showSaveModal, showLoadModal, tempSaveName, savedFileList, openSaveModal, confirmSaveLocally, openLoadModal, loadSelectedFile, deleteSavedFile,
+                    activeRatingItem, openRatingModal, removePhoto, handleFileUpload
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
