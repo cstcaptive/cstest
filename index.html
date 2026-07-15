@@ -11,123 +11,103 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans">
+<body class="bg-gray-50 min-h-screen font-sans text-gray-800">
 
-<div id="app" v-cloak class="max-w-md mx-auto bg-white min-h-screen shadow-xl flex flex-col relative pb-28">
+<div id="app" v-cloak class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col relative pb-28">
     
     <!-- 顶栏头部 -->
     <header class="bg-white border-b sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
-        <h1 class="text-xl font-black text-gray-800 flex items-center gap-1">智能点菜系统</h1>
-        <div class="flex items-center gap-2">
-            <!-- 📁 读取菜单 -->
-            <button @click="openLoadModal" class="p-2 text-gray-600 hover:text-blue-600 bg-gray-50 rounded-full active:scale-90 transition" title="读取历史菜单">
-                <span class="text-lg">📁</span>
-            </button>
-            <!-- 💾 保存菜单 -->
-            <button @click="saveCurrentMenu" class="p-2 text-gray-600 hover:text-green-600 bg-gray-50 rounded-full active:scale-90 transition" title="保存当前菜单">
-                <span class="text-lg">💾</span>
-            </button>
-            <!-- 📸 拍菜单大图 -->
-            <button @click="triggerUpload" class="bg-blue-600 text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 shadow-md hover:bg-blue-700 active:scale-95 transition">
-                <span class="text-sm">📸</span>
-                <span class="text-xs">拍菜单</span>
+        <h1 class="text-lg font-bold tracking-wide">智能点菜系统</h1>
+        <div class="flex items-center gap-3">
+            <button @click="openLoadModal" class="text-sm text-gray-500 hover:text-blue-600 transition">读取</button>
+            <button @click="saveCurrentMenu" class="text-sm text-gray-500 hover:text-blue-600 transition">保存</button>
+            <button @click="triggerUpload" class="bg-gray-900 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-gray-800 transition">
+                拍菜单
             </button>
             <input type="file" ref="fileInput" multiple accept="image/*" class="hidden" @change="handleFileUpload">
         </div>
     </header>
 
     <!-- 货币汇率转换栏 -->
-    <div class="bg-slate-900 text-white px-4 py-2 flex items-center justify-between text-xs sticky top-[53px] z-30 shadow-sm">
-        <div class="flex items-center gap-1">
-            <span class="text-gray-400">原币:</span>
-            <select v-model="origCurrency" class="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-white focus:outline-none">
+    <div class="bg-gray-100 border-b px-4 py-2 flex items-center justify-between text-xs sticky top-[53px] z-30">
+        <div class="flex items-center gap-2">
+            <span class="text-gray-500">原币</span>
+            <select v-model="origCurrency" class="bg-white border rounded px-1 py-0.5 outline-none">
                 <option v-for="(symbol, key) in currencyMap" :key="key" :value="key">{{ key }} ({{ symbol }})</option>
             </select>
-            <span v-if="isAiAutoDetected" class="bg-green-500 text-slate-900 px-1 rounded font-bold scale-90">AI</span>
         </div>
-        <span class="text-gray-500">⇄</span>
-        <div class="flex items-center gap-1">
-            <span class="text-gray-400">折算:</span>
-            <select v-model="targetCurrency" class="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-yellow-400 focus:outline-none">
+        <span class="text-gray-400">→</span>
+        <div class="flex items-center gap-2">
+            <span class="text-gray-500">折算</span>
+            <select v-model="targetCurrency" class="bg-white border rounded px-1 py-0.5 outline-none">
                 <option v-for="(symbol, key) in currencyMap" :key="key" :value="key">{{ key }} ({{ symbol }})</option>
             </select>
         </div>
     </div>
 
-    <!-- 搜索过滤栏 -->
+    <!-- 全局搜索 -->
     <div class="p-3 bg-white border-b">
-        <input type="text" v-model="searchQuery" placeholder="全局搜索菜名或原料..." class="w-full bg-gray-100 border-none rounded-xl py-2 px-4 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="text" v-model="searchQuery" placeholder="搜索菜名或原料..." class="w-full bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-gray-400 transition">
     </div>
 
-    <!-- 【功能1大改：顶部可横向滚动切换的智能分类标签页】 -->
-    <div v-if="groupedMenu.length > 0" class="bg-white border-b sticky top-[134px] z-20 overflow-x-auto whitespace-nowrap p-2 flex gap-2 hide-scrollbar shadow-sm">
+    <!-- 顶部智能分类标签页 -->
+    <div v-if="groupedMenu.length > 0" class="bg-white border-b sticky top-[133px] z-20 overflow-x-auto whitespace-nowrap p-2 flex gap-2 hide-scrollbar">
         <button v-for="category in groupedMenu" :key="category.name" @click="activeCategory = category.name"
-                :class="activeCategory === category.name ? 'bg-blue-600 text-white font-black shadow-md scale-105' : 'bg-gray-100 text-gray-600 font-medium'"
-                class="px-3.5 py-1.5 rounded-full text-xs transition-all duration-200 flex-shrink-0">
+                :class="activeCategory === category.name ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0">
             {{ category.name }}
         </button>
     </div>
 
     <!-- 加载与空状态 -->
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
-        <div class="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-3"></div>
-        <p class="text-xs animate-pulse">AI 正在以中国人习惯动态建立标签分类页...</p>
+        <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="text-xs">正在极速解析菜单数据...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
-        <span class="text-5xl mb-3">📑</span>
-        <h3 class="text-sm font-bold text-gray-600 mb-1">暂无菜单数据</h3>
-        <p class="text-xs px-4">点击右上角「拍菜单」进行智能解析，或点击 📁 图标读取备份。</p>
+        <p class="text-xs">暂无菜单数据，请点击「拍菜单」导入图片。</p>
     </div>
 
-    <!-- 独立标签页菜品视窗（只展示当前激活标签底下的菜品，干净利落） -->
+    <!-- 独立标签页菜品列表 -->
     <main v-else class="flex-1 p-3 space-y-3 overflow-y-auto">
-        <div v-for="dish in currentCategoryDishes" :key="dish.id" class="flex gap-3 bg-white border border-gray-100 p-3 rounded-xl shadow-sm relative">
+        <div v-for="dish in currentCategoryDishes" :key="dish.id" class="flex gap-3 bg-white border border-gray-100 p-3 rounded shadow-sm">
             
-            <!-- 【特色4：智能缩略图，点开查看大图对比】 -->
-            <div @click="viewDishPhotos(dish)" class="w-16 h-16 rounded-lg overflow-hidden bg-gray-50 border border-gray-200 shadow-inner cursor-zoom-in flex-shrink-0 relative group" title="点击查看与对比原图">
+            <!-- 缩略图 -->
+            <div @click="viewDishPhotos(dish)" class="w-16 h-16 rounded overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 relative group cursor-pointer">
                 <img v-if="dish.customPhotos && dish.customPhotos.length" :src="dish.customPhotos[0]" class="w-full h-full object-cover">
                 <img v-else-if="sourceImages[dish.sourceImageIdx]" :src="sourceImages[dish.sourceImageIdx]" class="w-full h-full object-cover">
-                <div v-else class="w-full h-full flex items-center justify-center text-2xl bg-gray-50">
-                    {{ getFallbackEmoji(dish.nameZh) }}
-                </div>
-                <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-[9px] text-white font-bold">比对原图</div>
+                <div v-else class="w-full h-full flex items-center justify-center text-xs text-gray-400">暂无图片</div>
             </div>
 
-            <!-- 菜品详情展示 -->
+            <!-- 菜品详情 -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
                 <div>
                     <div class="flex items-start justify-between gap-1">
                         <h3 class="font-bold text-gray-900 text-sm truncate">{{ dish.nameZh }}</h3>
-                        <span class="text-[11px] font-black text-amber-500" v-if="dish.rating > 0">★{{ dish.rating }}</span>
+                        <span class="text-xs font-medium text-gray-500" v-if="dish.rating > 0">{{ dish.rating }}★</span>
                     </div>
-                    <p class="text-[10px] text-gray-400 truncate font-mono">{{ dish.nameOrig }}</p>
+                    <p class="text-xs text-gray-400 truncate">{{ dish.nameOrig }}</p>
                     
-                    <!-- 规格定义 -->
                     <div class="flex flex-wrap gap-1 my-1" v-if="dish.specifications && dish.specifications.length">
-                        <button v-for="spec in dish.specifications" :key="spec" @click="dish.selectedSpec = spec" class="text-[9px] px-1.5 py-0.5 rounded border transition" :class="dish.selectedSpec === spec ? 'bg-blue-600 text-white border-blue-600 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'">
+                        <button v-for="spec in dish.specifications" :key="spec" @click="dish.selectedSpec = spec" class="text-[10px] px-2 py-0.5 rounded border transition" :class="dish.selectedSpec === spec ? 'bg-gray-800 text-white border-gray-800' : 'bg-gray-50 text-gray-500 border-gray-200'">
                             {{ spec }}
                         </button>
                     </div>
                 </div>
 
-                <!-- 底部价格、加减及【功能3：独立评价按钮】 -->
                 <div class="flex items-center justify-between mt-1">
-                    <div class="flex flex-col">
-                        <span class="text-[9px] text-gray-400 line-through font-mono">{{ currencyMap[origCurrency] }}{{ dish.priceOriginal }}</span>
-                        <span class="text-sm font-black text-rose-600 font-mono">{{ currencyMap[targetCurrency] }}{{ convertPrice(dish.priceOriginal) }}</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-sm font-bold text-gray-900">{{ currencyMap[targetCurrency] }}{{ convertPrice(dish.priceOriginal) }}</span>
+                        <span class="text-[10px] text-gray-400 line-through">{{ currencyMap[origCurrency] }}{{ dish.priceOriginal }}</span>
                     </div>
                     
                     <div class="flex items-center gap-2">
-                        <!-- 独立弹窗评价调出按钮 -->
-                        <button @click="openReviewModal(dish)" class="text-[10px] bg-gray-50 hover:bg-gray-100 text-blue-600 border px-2 py-1 rounded-lg active:scale-95 transition">
-                            评价
-                        </button>
-                        <!-- 增删改 -->
-                        <div class="flex items-center border rounded-full bg-gray-50 p-0.5 shadow-sm">
-                            <button v-if="getCartQty(dish.id, dish.selectedSpec) > 0" @click="removeFromCart(dish.id, dish.selectedSpec)" class="w-5 h-5 bg-white border text-gray-800 rounded-full font-black flex items-center justify-center active:scale-90 transition">-</button>
-                            <span v-if="getCartQty(dish.id, dish.selectedSpec) > 0" class="w-5 text-center font-bold text-xs text-gray-700">{{ getCartQty(dish.id, dish.selectedSpec) }}</span>
-                            <button @click="addToCart(dish)" class="w-5 h-5 bg-blue-600 text-white rounded-full font-black flex items-center justify-center active:scale-90 transition">+</button>
+                        <button @click="openReviewModal(dish)" class="text-[10px] text-gray-500 border px-2 py-0.5 rounded hover:bg-gray-50 transition">评价</button>
+                        <div class="flex items-center border rounded">
+                            <button v-if="getCartQty(dish.id, dish.selectedSpec) > 0" @click="removeFromCart(dish.id, dish.selectedSpec)" class="w-6 h-6 flex items-center justify-center text-gray-600">-</button>
+                            <span v-if="getCartQty(dish.id, dish.selectedSpec) > 0" class="w-6 text-center text-xs font-medium text-gray-800">{{ getCartQty(dish.id, dish.selectedSpec) }}</span>
+                            <button @click="addToCart(dish)" class="w-6 h-6 flex items-center justify-center text-gray-600 bg-gray-50">+</button>
                         </div>
                     </div>
                 </div>
@@ -135,114 +115,96 @@
         </div>
     </main>
 
-    <!-- 【功能2重装：永久常驻底部的购物车结算快捷控制栏】 -->
-    <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-2xl flex items-center justify-between z-40">
-        <div @click="openInvoiceModal" class="flex items-center gap-3 cursor-pointer group">
-            <div class="relative bg-slate-900 text-white p-2.5 rounded-xl transition group-hover:bg-slate-800">
-                <span class="text-xl">🛒</span>
-                <span v-if="cartTotalQty > 0" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[9px] font-black rounded-full h-4 w-4 flex items-center justify-center border border-white">{{ cartTotalQty }}</span>
-            </div>
-            <div>
-                <p class="text-xs font-bold text-gray-800">结算购物车</p>
-                <p class="text-[10px] text-gray-400">共选购了 {{ cartTotalQty }} 份美食</p>
-            </div>
+    <!-- 底部结算快捷栏 -->
+    <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
+        <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
+            <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
+            <p class="text-base font-bold text-gray-900">总计: {{ currencyMap[targetCurrency] }}{{ cartTotalPrice }}</p>
         </div>
         <button @click="openInvoiceModal" :disabled="cartTotalQty === 0" 
-                :class="cartTotalQty === 0 ? 'bg-gray-300 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:brightness-110 active:scale-95 shadow-md'" 
-                class="px-5 py-2.5 rounded-xl text-xs font-black transition">
-            去结算清单 ({{ currencyMap[targetCurrency] }}{{ cartTotalPrice }})
+                :class="cartTotalQty === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-900 text-white hover:bg-gray-800'" 
+                class="px-5 py-2 rounded text-sm font-medium transition">
+            结算明细
         </button>
     </div>
 
-    <!-- 【功能3大改：独立菜品评价及拍照上传专用弹窗系统】 -->
-    <div v-if="showReviewModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/60 flex items-center justify-center p-4" @click.self="closeReviewModal">
-        <div class="bg-white rounded-2xl w-full p-4 shadow-2xl space-y-4 animate-fade-in">
+    <!-- 独立评价弹窗 -->
+    <div v-if="showReviewModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex items-center justify-center p-4" @click.self="closeReviewModal">
+        <div class="bg-white rounded w-full p-4 shadow-lg space-y-4">
             <div class="flex justify-between items-center border-b pb-2">
-                <h4 class="text-sm font-black text-gray-900 truncate">评价：{{ reviewTarget.nameZh }}</h4>
-                <button @click="closeReviewModal" class="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                <h4 class="text-sm font-bold text-gray-900 truncate">评价：{{ reviewTarget.nameZh }}</h4>
+                <button @click="closeReviewModal" class="text-gray-400 text-xs">关闭</button>
             </div>
             
-            <!-- 星级评定 -->
             <div class="flex items-center justify-center gap-2 py-2">
-                <span class="text-xs text-gray-500">点击星级打分:</span>
-                <span v-for="star in 5" :key="star" @click="reviewTarget.rating = star" class="cursor-pointer text-2xl transition active:scale-120" :class="star <= reviewTarget.rating ? 'text-amber-400' : 'text-gray-200'">★</span>
+                <span class="text-xs text-gray-500">打分:</span>
+                <span v-for="star in 5" :key="star" @click="reviewTarget.rating = star" class="cursor-pointer text-xl transition" :class="star <= reviewTarget.rating ? 'text-gray-900' : 'text-gray-200'">★</span>
             </div>
 
-            <!-- 照片上传区域 -->
-            <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">
+            <div class="border border-dashed border-gray-300 rounded p-4 text-center">
                 <label class="cursor-pointer block space-y-1">
-                    <span class="text-3xl block">📸</span>
-                    <span class="text-xs font-bold text-blue-600 block">拍摄或上传美食实拍照片</span>
-                    <span class="text-[10px] text-gray-400 block">上传后将自动同步为该菜品的专属前端缩略图</span>
+                    <span class="text-xs font-medium text-blue-600 block">点击上传实拍图</span>
+                    <span class="text-[10px] text-gray-400 block">将作为该菜品的最新缩略图</span>
                     <input type="file" accept="image/*" class="hidden" @change="handleReviewPhotoUpload">
                 </label>
             </div>
 
-            <!-- 已传照片预览 -->
-            <div v-if="reviewTarget.customPhotos && reviewTarget.customPhotos.length" class="grid grid-cols-4 gap-2">
-                <div v-for="(img, idx) in reviewTarget.customPhotos" :key="idx" class="w-full h-12 rounded-lg overflow-hidden border">
+            <div v-if="reviewTarget.customPhotos && reviewTarget.customPhotos.length" class="flex gap-2">
+                <div v-for="(img, idx) in reviewTarget.customPhotos" :key="idx" class="w-12 h-12 rounded overflow-hidden border">
                     <img :src="img" class="w-full h-full object-cover">
                 </div>
             </div>
 
-            <button @click="closeReviewModal" class="w-full bg-slate-900 text-white font-bold py-2 rounded-xl text-xs shadow hover:bg-slate-800 transition">
-                保存并返回菜单
-            </button>
+            <button @click="closeReviewModal" class="w-full bg-gray-900 text-white font-medium py-2 rounded text-xs transition">完成</button>
         </div>
     </div>
 
-    <!-- 【功能2内含：选购清单核对与可编辑电子图片发票结算弹窗】 -->
-    <div v-if="showInvoiceModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/60 flex flex-col justify-end" @click.self="closeInvoiceModal">
-        <div class="bg-white rounded-t-3xl max-h-[85vh] flex flex-col p-4 shadow-2xl">
+    <!-- 结算清单与发票生成弹窗 -->
+    <div v-if="showInvoiceModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex flex-col justify-end" @click.self="closeInvoiceModal">
+        <div class="bg-white rounded-t max-h-[85vh] flex flex-col p-4 shadow-lg">
             <div class="flex justify-between items-center pb-2 border-b">
-                <h3 class="text-sm font-black text-gray-900">核对结算清单</h3>
-                <button @click="closeInvoiceModal" class="text-gray-400 text-xs font-bold">关闭</button>
+                <h3 class="text-sm font-bold text-gray-900">结算与发票</h3>
+                <button @click="closeInvoiceModal" class="text-gray-400 text-xs">关闭</button>
             </div>
 
             <div class="flex-1 overflow-y-auto py-2 space-y-3 hide-scrollbar">
-                <!-- 自定义开票及小票元数据配置表单 -->
-                <div class="bg-gray-50 p-3 rounded-xl space-y-2 text-xs text-gray-700">
+                <div class="bg-gray-50 border p-3 rounded space-y-2 text-xs">
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-[10px] text-gray-400 font-bold mb-0.5">餐厅名字修改</label>
-                            <input type="text" v-model="invoiceMeta.restaurantName" class="w-full bg-white border rounded p-1 text-xs">
+                            <label class="block text-gray-500 mb-1">餐厅名称</label>
+                            <input type="text" v-model="invoiceMeta.restaurantName" class="w-full border rounded p-1 outline-none">
                         </div>
                         <div>
-                            <label class="block text-[10px] text-gray-400 font-bold mb-0.5">开票时间微调</label>
-                            <input type="text" v-model="invoiceMeta.dateTime" class="w-full bg-white border rounded p-1 text-xs">
+                            <label class="block text-gray-500 mb-1">开票时间</label>
+                            <input type="text" v-model="invoiceMeta.dateTime" class="w-full border rounded p-1 outline-none">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-[10px] text-gray-400 font-bold mb-0.5">服务费金率 (Service %)</label>
-                            <input type="number" v-model.number="invoiceMeta.serviceRate" class="w-full bg-white border rounded p-1 text-xs">
+                            <label class="block text-gray-500 mb-1">服务费率 (%)</label>
+                            <input type="number" v-model.number="invoiceMeta.serviceRate" class="w-full border rounded p-1 outline-none">
                         </div>
                         <div>
-                            <label class="block text-[10px] text-gray-400 font-bold mb-0.5">税率金率 (Tax %)</label>
-                            <input type="number" v-model.number="invoiceMeta.taxRate" class="w-full bg-white border rounded p-1 text-xs">
+                            <label class="block text-gray-500 mb-1">税率 (%)</label>
+                            <input type="number" v-model.number="invoiceMeta.taxRate" class="w-full border rounded p-1 outline-none">
                         </div>
                     </div>
                 </div>
 
-                <!-- 已选购菜品详细清单（包含原文、中译文、规格选项、数量、价格，以及增删功能） -->
                 <div class="space-y-1.5">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">清单品类细项</p>
-                    <div class="divide-y border rounded-xl overflow-hidden bg-white px-3">
-                        <div v-for="item in cart" :key="item.id + '_' + item.selectedSpec" class="py-2 flex items-center justify-between text-xs">
-                            <div class="flex-1 min-w-0 pr-2">
-                                <div class="flex items-center gap-1">
-                                    <p class="font-bold text-gray-900 truncate">{{ item.nameZh }}</p>
-                                    <span class="text-[9px] bg-slate-100 text-slate-600 px-1 rounded">{{ item.selectedSpec }}</span>
-                                </div>
-                                <p class="text-[9px] text-gray-400 truncate font-mono">{{ item.nameOrig }}</p>
-                                <p class="text-[9px] text-gray-500 font-mono">{{ currencyMap[targetCurrency] }}{{ convertPrice(item.priceOriginal) }} × {{ item.qty }}</p>
+                    <p class="text-xs font-medium text-gray-500">消费明细</p>
+                    <div class="divide-y border rounded bg-white px-2">
+                        <div v-for="item in cart" :key="item.id + '_' + item.selectedSpec" class="py-2 flex justify-between text-xs">
+                            <div class="flex-1 pr-2">
+                                <p class="font-medium text-gray-900">{{ item.nameZh }} <span class="text-[10px] text-gray-500">({{ item.selectedSpec }})</span></p>
+                                <p class="text-[10px] text-gray-400 truncate">{{ item.nameOrig }}</p>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold text-rose-600 font-mono text-xs">{{ currencyMap[targetCurrency] }}{{ (convertPrice(item.priceOriginal) * item.qty).toFixed(2) }}</span>
-                                <div class="flex items-center border rounded-full bg-gray-50">
-                                    <button @click="removeFromCart(item.id, item.selectedSpec)" class="w-5 h-5 flex items-center justify-center font-bold text-gray-500">-</button>
-                                    <span class="w-4 text-center text-[10px] font-bold">{{ item.qty }}</span>
-                                    <button @click="addToCart(item, item.selectedSpec)" class="w-5 h-5 flex items-center justify-center font-bold text-gray-500">+</button>
+                            <div class="flex flex-col items-end">
+                                <span class="font-bold">{{ currencyMap[targetCurrency] }}{{ (convertPrice(item.priceOriginal) * item.qty).toFixed(2) }}</span>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <button @click="removeFromCart(item.id, item.selectedSpec)" class="text-gray-400 px-1 border rounded">-</button>
+                                    <span class="text-[10px]">{{ item.qty }}</span>
+                                    <button @click="addToCart(item, item.selectedSpec)" class="text-gray-400 px-1 border rounded">+</button>
                                 </div>
                             </div>
                         </div>
@@ -250,58 +212,57 @@
                 </div>
             </div>
 
-            <!-- 一键生成电子发票大图触发区 -->
-            <div class="pt-2 border-t">
-                <button @click="generateImageInvoice" class="w-full bg-gradient-to-r from-slate-950 to-slate-800 text-white font-black text-xs py-2.5 rounded-xl shadow-md active:scale-95 transition">
-                    📜 一键画出并生成纯图片格式发票 (PNG/JPG)
+            <div class="pt-3 border-t">
+                <button @click="generateImageInvoice" class="w-full bg-gray-900 text-white text-xs font-medium py-2 rounded transition">
+                    生成图片发票
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 历史数据载入弹窗 -->
+    <!-- 数据载入弹窗 -->
     <div v-if="showLoadModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex items-center justify-center p-4" @click.self="showLoadModal = false">
-        <div class="bg-white rounded-2xl w-full p-4 max-h-[50vh] flex flex-col">
-            <h3 class="font-bold text-gray-900 text-xs mb-2">已存档账单历史</h3>
+        <div class="bg-white rounded w-full p-4 max-h-[50vh] flex flex-col">
+            <h3 class="font-bold text-xs mb-2">历史备份记录</h3>
             <div class="flex-1 overflow-y-auto space-y-2 text-xs hide-scrollbar">
-                <div v-if="savedMenusList.length === 0" class="text-center text-gray-400 py-6">暂无本地记录</div>
-                <div v-for="(m, i) in savedMenusList" :key="i" class="p-2 border rounded-xl flex justify-between items-center bg-gray-50">
+                <div v-if="savedMenusList.length === 0" class="text-center text-gray-400 py-4">无记录</div>
+                <div v-for="(m, i) in savedMenusList" :key="i" class="p-2 border rounded flex justify-between items-center">
                     <div class="cursor-pointer flex-1" @click="loadSavedMenu(i)">
-                        <p class="font-bold text-gray-800">{{ m.name }}</p>
-                        <p class="text-[9px] text-gray-400">{{ m.time }} • {{ m.count }}道菜</p>
+                        <p class="font-medium">{{ m.name }}</p>
+                        <p class="text-[10px] text-gray-400">{{ m.time }}</p>
                     </div>
-                    <button @click="deleteSavedMenu(i)" class="text-red-500 text-xs px-2">删除</button>
+                    <button @click="deleteSavedMenu(i)" class="text-red-500 text-[10px]">删除</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 原始图片溯源比对画廊灯箱 -->
-    <div v-if="photoViewer.isOpen" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/95 flex flex-col justify-between p-4" @click.self="photoViewer.isOpen = false">
-        <div class="text-white flex justify-between items-center text-xs font-bold border-b border-gray-800 pb-2">
-            <span>🔍 原始菜品图像比对校对</span>
-            <button @click="photoViewer.isOpen = false" class="text-gray-400">✕</button>
+    <!-- 图片对照画廊 -->
+    <div v-if="photoViewer.isOpen" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/90 flex flex-col justify-between p-4" @click.self="photoViewer.isOpen = false">
+        <div class="text-white flex justify-between text-xs pb-2">
+            <span>图片查看</span>
+            <button @click="photoViewer.isOpen = false">关闭</button>
         </div>
         <div class="flex-1 flex flex-col justify-center gap-3">
-            <img :src="photoViewer.list[photoViewer.index]" class="w-full h-auto max-h-[60vh] object-contain mx-auto rounded-lg shadow-2xl">
-            <p class="text-center text-xs text-gray-400">第 {{ photoViewer.index + 1 }} / {{ photoViewer.list.length }} 张关联图片</p>
+            <img :src="photoViewer.list[photoViewer.index]" class="w-full h-auto max-h-[60vh] object-contain mx-auto">
+            <p class="text-center text-xs text-gray-400">{{ photoViewer.index + 1 }} / {{ photoViewer.list.length }}</p>
             <div class="flex justify-center gap-4">
-                <button v-if="photoViewer.index > 0" @click="photoViewer.index--" class="bg-gray-800 text-white px-3 py-1 rounded text-xs font-bold">上张</button>
-                <button v-if="photoViewer.index < photoViewer.list.length - 1" @click="photoViewer.index++" class="bg-gray-800 text-white px-3 py-1 rounded text-xs font-bold">下张</button>
+                <button v-if="photoViewer.index > 0" @click="photoViewer.index--" class="text-white text-xs border px-3 py-1 rounded">上一张</button>
+                <button v-if="photoViewer.index < photoViewer.list.length - 1" @click="photoViewer.index++" class="text-white text-xs border px-3 py-1 rounded">下一张</button>
             </div>
         </div>
     </div>
 
-    <!-- 生成完的发票图片独立保存及长按层 -->
-    <div v-if="renderedInvoiceImg" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/85 flex flex-col items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-4 w-full space-y-3 max-h-[85vh] flex flex-col">
-            <p class="text-xs font-bold text-emerald-600 text-center">✓ 电子小票发票渲染绘制完成</p>
-            <div class="flex-1 overflow-y-auto border bg-gray-50 rounded-xl p-2 hide-scrollbar">
-                <img :src="renderedInvoiceImg" class="w-full h-auto mx-auto shadow-sm">
+    <!-- 生成的发票预览层 -->
+    <div v-if="renderedInvoiceImg" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/80 flex flex-col items-center justify-center p-4">
+        <div class="bg-white rounded p-4 w-full space-y-3 max-h-[85vh] flex flex-col">
+            <p class="text-xs font-bold text-center">发票生成完毕</p>
+            <div class="flex-1 overflow-y-auto border p-2">
+                <img :src="renderedInvoiceImg" class="w-full h-auto mx-auto border shadow-sm">
             </div>
             <div class="flex gap-2">
-                <button @click="renderedInvoiceImg = null" class="flex-1 border py-2 rounded-xl text-xs font-bold">返回修改</button>
-                <a :href="renderedInvoiceImg" download="智能发票.png" class="flex-1 bg-emerald-600 text-white py-2 rounded-xl text-xs font-bold text-center block shadow-md">保存下载图片</a>
+                <button @click="renderedInvoiceImg = null" class="flex-1 border py-2 rounded text-xs">关闭</button>
+                <a :href="renderedInvoiceImg" download="发票.png" class="flex-1 bg-gray-900 text-white py-2 rounded text-xs text-center block">保存图片</a>
             </div>
         </div>
     </div>
@@ -323,14 +284,9 @@ createApp({
         const showLoadModal = ref(false);
         const renderedInvoiceImg = ref(null);
         const savedMenusList = ref([]);
-        
-        // 【标签栏状态追踪】
         const activeCategory = ref('');
-
-        // 【评价弹窗内部数据链状态】
         const showReviewModal = ref(false);
         const reviewTarget = ref(null);
-
         const photoViewer = ref({ isOpen: false, list: [], index: 0 });
 
         const origCurrency = ref('USD');
@@ -338,9 +294,8 @@ createApp({
         const currencyMap = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'THB': '฿' };
         const rates = { 'CNY': 7.25, 'USD': 1.0, 'EUR': 0.92, 'GBP': 0.79, 'JPY': 155.0, 'THB': 36.5 };
 
-        // 2026默认结算数据
         const invoiceMeta = ref({
-            restaurantName: '智能AI点点香食府',
+            restaurantName: '餐厅',
             dateTime: new Date().toLocaleString('zh-CN', { hour12: false }),
             taxRate: 10,
             serviceRate: 5
@@ -349,19 +304,50 @@ createApp({
         const fileInput = ref(null);
         const triggerUpload = () => fileInput.value.click();
 
+        // 核心提速黑科技：前端纯 JS 毫秒级压缩图片
+        const compressImage = (file, maxWidth = 1024) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        if (w > maxWidth) {
+                            h = Math.round((h * maxWidth) / w);
+                            w = maxWidth;
+                        }
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.toBlob((blob) => {
+                            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                        }, 'image/jpeg', 0.7); // 质量压缩至 0.7，极大地减小体积
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
         const handleFileUpload = async (event) => {
             const files = event.target.files;
             if (!files.length) return;
 
             isLoading.value = true;
             const formData = new FormData();
-            
             sourceImages.value = [];
+
             for (let i = 0; i < files.length; i++) {
-                formData.append('files', files[i]);
-                const reader = new FileReader();
-                reader.onload = (e) => { sourceImages.value.push(e.target.result); };
-                reader.readAsDataURL(files[i]);
+                // 读取原图做本地对比使用
+                const localReader = new FileReader();
+                localReader.onload = (e) => { sourceImages.value.push(e.target.result); };
+                localReader.readAsDataURL(files[i]);
+
+                // 压缩图片后上传，速度直接起飞
+                const compressedFile = await compressImage(files[i]);
+                formData.append('files', compressedFile);
             }
 
             try {
@@ -389,8 +375,8 @@ createApp({
                                     nameZh: dish.nameZh || '未指明菜品',
                                     nameOrig: dish.nameOrig || '',
                                     priceOriginal: Number(dish.priceOriginal) || 0,
-                                    specifications: dish.specifications || ['标准例份', '大份'],
-                                    selectedSpec: (dish.specifications && dish.specifications.length) ? dish.specifications[0] : '标准例份',
+                                    specifications: dish.specifications || ['常规'],
+                                    selectedSpec: (dish.specifications && dish.specifications.length) ? dish.specifications[0] : '常规',
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
                                     rating: 0, 
                                     customPhotos: [] 
@@ -401,99 +387,69 @@ createApp({
                     formattedMenu.value = newMenu;
                     cart.value = [];
 
-                    // 【功能1自动校准：解析成功后，立刻默认选定第一个生成的有效分类标签】
-                    if (groupedMenu.value.length > 0) {
-                        activeCategory.value = groupedMenu.value[0].name;
-                    }
+                    if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
                 }
             } catch (err) {
-                alert("AI解析出错: " + err.message);
-            } bits: { isLoading.value = false; }
+                alert("请求失败: " + err.message);
+            } finally {
+                isLoading.value = false;
+            }
         };
 
-        // 【功能3核心动作：激活菜品独立评价弹窗】
-        const openReviewModal = (dish) => {
-            reviewTarget.value = dish;
-            showReviewModal.value = true;
-        };
+        const openReviewModal = (dish) => { reviewTarget.value = dish; showReviewModal.value = true; };
+        const closeReviewModal = () => { showReviewModal.value = false; reviewTarget.value = null; };
 
-        const closeReviewModal = () => {
-            showReviewModal.value = false;
-            reviewTarget.value = null;
-        };
-
-        // 【功能3动作：用户现场上传评价图瞬间，前端瞬间逆向同步首位并升级为卡片缩略图】
-        const handleReviewPhotoUpload = (event) => {
+        const handleReviewPhotoUpload = async (event) => {
             const file = event.target.files[0];
             if (!file || !reviewTarget.value) return;
+            
+            // 同样采用压缩提升前端内存体验
+            const compressedFile = await compressImage(file, 800);
             const reader = new FileReader();
             reader.onload = (e) => {
                 reviewTarget.value.customPhotos.unshift(e.target.result);
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(compressedFile);
         };
 
-        const convertPrice = (priceOrig) => {
-            return ((priceOrig / rates[origCurrency.value]) * rates[targetCurrency.value]).toFixed(2);
-        };
+        const convertPrice = (priceOrig) => ((priceOrig / rates[origCurrency.value]) * rates[targetCurrency.value]).toFixed(2);
 
         const filteredMenu = computed(() => {
             if (!searchQuery.value.trim()) return formattedMenu.value;
             const q = searchQuery.value.toLowerCase();
-            return formattedMenu.value.filter(d => 
-                d.nameZh.toLowerCase().includes(q) || d.nameOrig.toLowerCase().includes(q)
-            );
+            return formattedMenu.value.filter(d => d.nameZh.toLowerCase().includes(q) || d.nameOrig.toLowerCase().includes(q));
         });
 
-        // 🇨🇳 【功能1+2核心：根据中国人习惯特征，按高内聚映射具体菜系名称，无菜品不显标签】
         const getChineseCategory = (nameZh) => {
             const name = nameZh.toLowerCase();
-            if (name.includes('饭') || name.includes('米') || name.includes('rice')) return '🍚 饭类/盖饭';
-            if (name.includes('面') || name.includes('粉') || name.includes('串') || name.includes('noodle')) return '🍝 面食/粉条';
-            if (name.includes('汤') || name.includes('羹') || name.includes('soup')) return '🍲 靓汤炖羹';
-            if (name.includes('饮') || name.includes('水') || name.includes('酒') || name.includes('汁') || name.includes('drink')) return '🥤 冰爽饮料';
-            if (name.includes('汉堡') || name.includes('burger')) return '🍔 汉堡快餐';
-            if (name.includes('披萨') || name.includes('比萨') || name.includes('pizza')) return '🍕 经典披萨';
-            if (name.includes('鱼') || name.includes('fish')) return '🐟 鲜美鱼类';
-            if (name.includes('虾') || name.includes('蟹') || name.includes('海鲜') || name.includes('seafood')) return '🦞 虾蟹海鲜';
-            if (name.includes('肉') || name.includes('鸡') || name.includes('猪') || name.includes('牛') || name.includes('排')) return '🥩 美味精肉';
-            if (name.includes('甜') || name.includes('糕') || name.includes('冰') || name.includes('点心')) return '🍰 甜品点心';
-            return '🍽️ 其它美味';
+            if (name.includes('饭') || name.includes('米') || name.includes('rice')) return '饭类';
+            if (name.includes('面') || name.includes('粉') || name.includes('noodle')) return '面食';
+            if (name.includes('汤') || name.includes('soup')) return '汤羹';
+            if (name.includes('饮') || name.includes('水') || name.includes('酒') || name.includes('drink')) return '饮料';
+            if (name.includes('汉堡') || name.includes('burger') || name.includes('pizza') || name.includes('披萨')) return '快餐';
+            if (name.includes('鱼') || name.includes('虾') || name.includes('海鲜') || name.includes('seafood')) return '海鲜';
+            if (name.includes('肉') || name.includes('鸡') || name.includes('牛')) return '肉类';
+            if (name.includes('甜') || name.includes('糕') || name.includes('冰')) return '甜品';
+            return '其它';
         };
 
         const groupedMenu = computed(() => {
             const groups = {};
-            const aiRecommendedDishes = [];
-
             filteredMenu.value.forEach(d => {
-                if (d.isAiRecommended) aiRecommendedDishes.push(d);
                 const cat = getChineseCategory(d.nameZh);
                 if (!groups[cat]) groups[cat] = [];
                 groups[cat].push(d);
             });
-            
             const result = [];
-            
-            // 首置 AI 推荐分类页（仅存在推荐内容时才会创建此标签）
-            if (aiRecommendedDishes.length > 0) {
-                result.push({ name: '🔥 AI推荐 (主厨招牌)', dishes: aiRecommendedDishes });
-            }
-
-            const activeCategories = Object.keys(groups).sort();
-            activeCategories.forEach(cat => {
-                result.push({ name: cat, dishes: groups[cat] });
-            });
-
+            Object.keys(groups).sort().forEach(cat => result.push({ name: cat, dishes: groups[cat] }));
             return result;
         });
 
-        // 【功能1核心联动：返回当前选定标签页旗下的对应菜品】
         const currentCategoryDishes = computed(() => {
             const found = groupedMenu.value.find(c => c.name === activeCategory.value);
             return found ? found.dishes : [];
         });
 
-        // 结算流逻辑
         const getCartQty = (id, spec) => {
             const found = cart.value.find(i => i.id === id && i.selectedSpec === spec);
             return found ? found.qty : 0;
@@ -502,11 +458,7 @@ createApp({
         const addToCart = (dish, specificSpec = null) => {
             const targetSpec = specificSpec || dish.selectedSpec;
             const found = cart.value.find(i => i.id === dish.id && i.selectedSpec === targetSpec);
-            if (found) {
-                found.qty++;
-            } else {
-                cart.value.push({ ...dish, selectedSpec: targetSpec, qty: 1 });
-            }
+            if (found) found.qty++; else cart.value.push({ ...dish, selectedSpec: targetSpec, qty: 1 });
         };
 
         const removeFromCart = (id, spec) => {
@@ -518,161 +470,60 @@ createApp({
         };
 
         const cartTotalQty = computed(() => cart.value.reduce((sum, i) => sum + i.qty, 0));
-        const cartTotalPrice = computed(() => {
-            return cart.value.reduce((sum, item) => sum + (Number(convertPrice(item.priceOriginal)) * item.qty), 0).toFixed(2);
-        });
+        const cartTotalPrice = computed(() => cart.value.reduce((sum, item) => sum + (Number(convertPrice(item.priceOriginal)) * item.qty), 0).toFixed(2));
 
-        // 本地存取
         const saveCurrentMenu = () => {
-            if (!formattedMenu.value.length) return alert("当前无可保存的内容");
-            const name = prompt("请输入此单菜单存档备注名称:", "本地小单-" + new Date().toLocaleDateString());
+            if (!formattedMenu.value.length) return alert("无可保存内容");
+            const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-
-            const record = {
-                name, time: new Date().toLocaleString(), count: formattedMenu.value.length,
-                formattedMenu: formattedMenu.value, sourceImages: sourceImages.value,
-                origCurrency: origCurrency.value, targetCurrency: targetCurrency.value
-            };
-            const history = JSON.parse(localStorage.getItem('menu_storage_v3') || '[]');
-            history.unshift(record);
-            localStorage.setItem('menu_storage_v3', JSON.stringify(history));
-            alert("菜单配置信息已成功存盘！");
+            const history = JSON.parse(localStorage.getItem('menu_storage_v4') || '[]');
+            history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
+            localStorage.setItem('menu_storage_v4', JSON.stringify(history));
+            alert("保存成功！");
         };
 
-        const openLoadModal = () => {
-            savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v3') || '[]');
-            showLoadModal.value = true;
-        };
-
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v4') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
-            const target = savedMenusList.value[index];
-            formattedMenu.value = target.formattedMenu;
-            sourceImages.value = target.sourceImages || [];
-            origCurrency.value = target.origCurrency;
-            targetCurrency.value = target.targetCurrency;
-            cart.value = []; 
-            showLoadModal.value = false;
+            const t = savedMenusList.value[index];
+            formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
+            cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
-            alert(`已成功载入备份：${target.name}`);
         };
-
-        const deleteSavedMenu = (index) => {
-            if(confirm("确定彻底删除吗？")){
-                savedMenusList.value.splice(index, 1);
-                localStorage.setItem('menu_storage_v3', JSON.stringify(savedMenusList.value));
-            }
-        };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v4', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
             if (dish.customPhotos && dish.customPhotos.length) list.push(...dish.customPhotos);
             if (sourceImages.value[dish.sourceImageIdx]) list.push(sourceImages.value[dish.sourceImageIdx]);
-            
-            if (list.length > 0) {
-                photoViewer.value.list = list;
-                photoViewer.value.index = 0;
-                photoViewer.value.isOpen = true;
-            } else {
-                alert("无可用关联图片。您可以点击右下角「评价」上传照片！");
-            }
+            if (list.length > 0) { photoViewer.value.list = list; photoViewer.value.index = 0; photoViewer.value.isOpen = true; }
         };
 
-        const getFallbackEmoji = (nameZh) => {
-            const name = nameZh.toLowerCase();
-            if (name.includes('面') || name.includes('粉')) return '🍝';
-            if (name.includes('饭') || name.includes('米')) return '🍚';
-            if (name.includes('鱼') || name.includes('海鲜')) return '🐟';
-            return '🍛';
-        };
-
-        // 【功能2核心动作：通过 Canvas 实时绘制生成纯图片发票】
         const generateImageInvoice = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
-            canvas.width = 500;
-            const itemHeight = cart.value.length * 52;
-            canvas.height = 370 + itemHeight;
+            canvas.width = 400; canvas.height = 250 + (cart.value.length * 40);
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.font = 'bold 18px sans-serif';
+            ctx.fillText(invoiceMeta.value.restaurantName, 200, 40);
+            ctx.font = '10px sans-serif'; ctx.fillStyle = '#666'; ctx.fillText('INVOICE / 电子账单', 200, 60);
+            ctx.textAlign = 'left'; ctx.font = '11px monospace'; ctx.fillText(`时间: ${invoiceMeta.value.dateTime}`, 20, 90);
+            ctx.beginPath(); ctx.moveTo(20, 105); ctx.lineTo(380, 105); ctx.stroke();
 
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, canvas.width, 15);
-
-            ctx.fillStyle = '#1e293b';
-            ctx.textAlign = 'center';
-            ctx.font = 'bold 20px Arial';
-            ctx.fillText(invoiceMeta.value.restaurantName, 250, 50);
-
-            ctx.font = '10px Courier New';
-            ctx.fillStyle = '#64748b';
-            ctx.fillText('ELECTRONIC INVOICE & RECEIPT', 250, 70);
-
-            ctx.textAlign = 'left';
-            ctx.font = '11px Courier New';
-            ctx.fillStyle = '#475569';
-            ctx.fillText(`开票时间: ${invoiceMeta.value.dateTime}`, 40, 100);
-            ctx.fillText(`汇率转化: 1 ${origCurrency.value} ≈ ${(rates[targetCurrency.value]/rates[origCurrency.value]).toFixed(4)} ${targetCurrency.value}`, 40, 118);
-
-            ctx.strokeStyle = '#94a3b8';
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath(); ctx.moveTo(40, 135); ctx.lineTo(460, 135); ctx.stroke();
-
-            let currentY = 165;
+            let y = 130;
             cart.value.forEach(item => {
-                ctx.fillStyle = '#0f172a';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText(`${item.nameZh} (${item.selectedSpec})`, 40, currentY);
-                ctx.fillStyle = '#64748b';
-                ctx.font = '10px Courier New';
-                ctx.fillText(item.nameOrig, 40, currentY + 15);
-
-                ctx.textAlign = 'right';
-                ctx.fillStyle = '#0f172a';
-                ctx.font = 'bold 13px Courier New';
-                const totalPriceStr = `${currencyMap[targetCurrency.value]}${(convertPrice(item.priceOriginal) * item.qty).toFixed(2)}`;
-                ctx.fillText(totalPriceStr, 460, currentY + 7);
-                ctx.font = '9px Courier New';
-                ctx.fillStyle = '#94a3b8';
-                ctx.fillText(`${currencyMap[origCurrency.value]}${item.priceOriginal} x ${item.qty}`, 460, currentY + 19);
-
-                ctx.textAlign = 'left';
-                currentY += 52;
+                ctx.fillStyle = '#111'; ctx.font = '12px sans-serif'; ctx.fillText(`${item.nameZh} (${item.selectedSpec})`, 20, y);
+                ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${(convertPrice(item.priceOriginal) * item.qty).toFixed(2)}`, 380, y);
+                ctx.textAlign = 'left'; ctx.fillStyle = '#888'; ctx.font = '10px monospace'; ctx.fillText(`x${item.qty}`, 20, y + 15);
+                y += 40;
             });
-
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath(); ctx.moveTo(40, currentY); ctx.lineTo(460, currentY); ctx.stroke();
-            
-            currentY += 25;
+            ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(380, y); ctx.stroke();
+            y += 20;
             const subTotal = Number(cartTotalPrice.value);
-            const tax = subTotal * (invoiceMeta.value.taxRate / 100);
-            const service = subTotal * (invoiceMeta.value.serviceRate / 100);
-            const finalTotal = subTotal + tax + service;
-
-            ctx.font = '11px Courier New';
-            ctx.fillStyle = '#475569';
-            ctx.fillText(`小计 (Subtotal):`, 40, currentY);
-            ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${subTotal.toFixed(2)}`, 460, currentY); ctx.textAlign = 'left';
-
-            currentY += 18;
-            ctx.fillText(`服务费/税率 (${invoiceMeta.value.serviceRate}% / ${invoiceMeta.value.taxRate}%):`, 40, currentY);
-            ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${(tax + service).toFixed(2)}`, 460, currentY); ctx.textAlign = 'left';
-
-            currentY += 25;
-            ctx.font = 'bold 15px Courier New';
-            ctx.fillStyle = '#dc2626';
-            ctx.fillText(`应付总计 (TOTAL):`, 40, currentY);
-            ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${finalTotal.toFixed(2)}`, 460, currentY); ctx.textAlign = 'left';
-
-            currentY += 25;
-            ctx.fillStyle = '#000000';
-            for (let b = 0; b < 40; b++) {
-                const w = Math.random() > 0.4 ? 2 : 4;
-                ctx.fillRect(100 + (b * 7), currentY, w, 28);
-            }
-            
-            renderedInvoiceImg.value = canvas.toDataURL('image/png');
+            const fee = subTotal * (invoiceMeta.value.taxRate/100 + invoiceMeta.value.serviceRate/100);
+            ctx.fillStyle = '#333'; ctx.fillText('税与服务费:', 20, y); ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${fee.toFixed(2)}`, 380, y);
+            y += 25; ctx.textAlign = 'left'; ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#000'; ctx.fillText('总计 (TOTAL):', 20, y);
+            ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${(subTotal + fee).toFixed(2)}`, 380, y);
+            renderedInvoiceImg.value = canvas.toDataURL('image/jpeg', 0.9);
             showInvoiceModal.value = false;
         };
 
@@ -684,14 +535,12 @@ createApp({
             showInvoiceModal, openInvoiceModal, closeInvoiceModal, triggerUpload, handleFileUpload, fileInput,
             origCurrency, targetCurrency, currencyMap, convertPrice, rates, filteredMenu, groupedMenu,
             getCartQty, addToCart, removeFromCart, saveCurrentMenu, openLoadModal, showLoadModal, savedMenusList,
-            loadSavedMenu, deleteSavedMenu, viewDishPhotos, photoViewer, getFallbackEmoji,
-            invoiceMeta, generateImageInvoice, renderedInvoiceImg,
-            activeCategory, currentCategoryDishes,
+            loadSavedMenu, deleteSavedMenu, viewDishPhotos, photoViewer,
+            invoiceMeta, generateImageInvoice, renderedInvoiceImg, activeCategory, currentCategoryDishes,
             showReviewModal, openReviewModal, closeReviewModal, reviewTarget, handleReviewPhotoUpload
         };
     }
 }).mount('#app');
 </script>
-
 </body>
 </html>

@@ -8,7 +8,6 @@ from openai import OpenAI
 
 app = FastAPI()
 
-# 配置 CORS 跨域
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,7 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 读取环境变量
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),
     base_url=os.environ.get("OPENAI_BASE_URL")
@@ -33,8 +31,6 @@ async def serve_frontend():
 async def parse_menu_files(files: List[UploadFile] = File(...)):
     try:
         content_list = []
-        
-        # 遍历处理图片
         for file in files:
             image_bytes = await file.read()
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
@@ -45,23 +41,20 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 }
             })
         
-        # 给出极其严苛的 JSON 结构限制提示词
+        # 极简提示词，大幅缩短 AI 生成 Token 的时间，提升速度
         content_list.append({
             "type": "text",
             "text": (
-                "请仔细分析这张菜单图片，提取所有的菜品并翻译为中文。"
-                "你必须输出一个符合以下结构的 JSON 对象，不要包含任何解释性文本或 Markdown 标记：\n"
+                "提取图片中的菜品并翻译为中文，输出严格的JSON，勿包含Markdown格式：\n"
                 "{\n"
-                "  \"detectedCurrency\": \"三位货币代码，例如 USD, GBP, EUR, CNY 等\",\n"
+                "  \"detectedCurrency\": \"货币代码如 USD, CNY\",\n"
                 "  \"menu\": {\n"
-                "    \"主菜/饮料/甜点等分类名\": [\n"
+                "    \"分类名(如:饭类,面食,汤羹,海鲜,肉类,饮料)\": [\n"
                 "      {\n"
-                "        \"nameOrig\": \"英文或原文菜名\",\n"
-                "        \"nameZh\": \"中文翻译菜名\",\n"
-                "        \"priceOriginal\": 数字类型的原价(注意：只要纯数字，不要带任何货币符号，例如 6.50),\n"
-                "        \"tags\": [\"标签1\", \"标签2\"],\n"
-                "        \"isAiRecommended\": 布尔值(根据菜品特色决定是否推荐，true 或 false),\n"
-                "        \"aiReason\": \"推荐理由，如果不推荐则为空字符串\"\n"
+                "        \"nameOrig\": \"原文\",\n"
+                "        \"nameZh\": \"中文名\",\n"
+                "        \"priceOriginal\": 数字,\n"
+                "        \"specifications\": [\"常规\"]\n"
                 "      }\n"
                 "    ]\n"
                 "  }\n"
@@ -69,21 +62,18 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
             )
         })
 
-        # 调用大模型，并强制开启 JSON Mode 确保返回 100% 合法的 JSON
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": "你是一个高度专业、只输出标准 JSON 数据的智能点餐助手。"},
+                {"role": "system", "content": "你是一个极速 JSON 解析器，只输出要求的核心字段，不要多余废话。"},
                 {"role": "user", "content": content_list}
             ]
         )
         
-        # 【完美对齐前端】返回前端日思夜想的 status 和 data 外壳
         return {
             "status": "success",
             "data": response.choices[0].message.content
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
