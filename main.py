@@ -41,10 +41,11 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 }
             })
         
+        # 强制要求 AI 提取带价格的规格结构体
         content_list.append({
             "type": "text",
             "text": (
-                "请仔细分析菜单图片，提取所有菜品及真实的份量/规格选项（如大小份、冷热、口味等），翻译为中文。输出严格的JSON，勿包含Markdown格式：\n"
+                "请深度分析菜单图片，提取所有菜品及它们各自不同规格的独立价格。输出严格的JSON，勿包含Markdown格式：\n"
                 "{\n"
                 "  \"detectedCurrency\": \"货币代码如 USD, CNY, TWD, GBP, EUR, HKD\",\n"
                 "  \"menu\": {\n"
@@ -52,10 +53,14 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 "      {\n"
                 "        \"nameOrig\": \"原文菜名\",\n"
                 "        \"nameZh\": \"中文翻译菜名\",\n"
-                "        \"priceOriginal\": 纯数字原价(例如 6.5),\n"
-                "        \"specifications\": [\"必须提取菜单上该菜品真实的所有规格选项字符串数组，例如 [\\\"小份\\\", \\\"大份\\\"] 或 [\\\"常规\\\"]\"],\n"
+                "        \"specifications\": [\n"
+                "           {\n"
+                "             \"specName\": \"规格名称(如: 小份, 大份, 常规, Hot, Iced)\",\n"
+                "             \"price\": 该规格对应的纯数字价格(例如 5.5)\n"
+                "           }\n"
+                "        ],\n"
                 "        \"isSignature\": 布尔值(是否为招牌/特色菜),\n"
-                "        \"keywords\": \"食材或语意关键词(如:海鲜,微辣,香肠)\"\n"
+                "        \"keywords\": \"食材或语意关键词(如:海鲜,微辣)\"\n"
                 "      }\n"
                 "    ]\n"
                 "  }\n"
@@ -67,7 +72,7 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": "你是一个高精度菜单结构化解析器，必须全面提取菜单上的多重规格选项。"},
+                {"role": "system", "content": "你是一个高精度餐饮菜单解析器，必须精准提取每种规格对应的独立价格。"},
                 {"role": "user", "content": content_list}
             ]
         )
