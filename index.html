@@ -47,7 +47,7 @@
         <input type="text" v-model="searchQuery" placeholder="搜索菜名、食材(如:海鲜)或口味..." class="w-full bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-gray-400 transition">
     </div>
 
-    <!-- 顶部智能分类标签页 (包含 AI 推荐) -->
+    <!-- 顶部智能分类标签页 -->
     <div v-if="groupedMenu.length > 0" class="bg-white border-b sticky top-[133px] z-20 overflow-x-auto whitespace-nowrap p-2 flex gap-2 hide-scrollbar shadow-sm">
         <button v-for="category in groupedMenu" :key="category.name" @click="activeCategory = category.name"
                 :class="activeCategory === category.name ? 'bg-gray-900 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
@@ -58,7 +58,7 @@
 
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
         <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs">正在极速解析菜单与提取招牌菜...</p>
+        <p class="text-xs">正在极速解析菜单并提取规格...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
@@ -81,7 +81,7 @@
                             <h3 class="font-bold text-gray-900 text-sm truncate">{{ dish.nameZh }}</h3>
                             <span v-if="dish.isSignature" class="bg-red-50 text-red-600 border border-red-100 px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0">招牌</span>
                         </div>
-                        <span class="text-xs font-medium text-gray-500" v-if="dish.rating > 0">{{ dish.rating }}★</span>
+                        <span class="text-xs font-medium text-gray-500 flex-shrink-0" v-if="dish.rating > 0">{{ dish.rating }}★</span>
                     </div>
                     <p class="text-xs text-gray-400 truncate">{{ dish.nameOrig }}</p>
                     
@@ -111,6 +111,7 @@
         </div>
     </main>
 
+    <!-- 底部结算快捷栏 -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
@@ -286,8 +287,9 @@ createApp({
 
         const origCurrency = ref('USD');
         const targetCurrency = ref('CNY');
-        const currencyMap = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'THB': '฿' };
-        const rates = { 'CNY': 7.25, 'USD': 1.0, 'EUR': 0.92, 'GBP': 0.79, 'JPY': 155.0, 'THB': 36.5 };
+        // 加入更广泛的货币映射防错
+        const currencyMap = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'THB': '฿', 'TWD': 'NT$', 'HKD': 'HK$' };
+        const rates = { 'CNY': 7.25, 'USD': 1.0, 'EUR': 0.92, 'GBP': 0.79, 'JPY': 155.0, 'THB': 36.5, 'TWD': 32.5, 'HKD': 7.8 };
 
         const invoiceMeta = ref({
             restaurantName: '餐厅',
@@ -346,6 +348,8 @@ createApp({
                     if (parsedData.detectedCurrency && currencyMap[parsedData.detectedCurrency]) {
                         origCurrency.value = parsedData.detectedCurrency;
                         isAiAutoDetected.value = true;
+                    } else {
+                        origCurrency.value = 'CNY'; // 兜底防止货币代码异常
                     }
                     
                     let newMenu = [];
@@ -354,12 +358,15 @@ createApp({
                         const val = parsedData.menu[catKey];
                         if (Array.isArray(val)) {
                             val.forEach((dish) => {
+                                // 价格安全清洗，过滤掉乱七八糟的逗号或字母
+                                let cleanPrice = parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, ''));
+                                
                                 newMenu.push({
                                     id: 'd_' + Date.now() + '_' + idx++,
                                     category: catKey,
                                     nameZh: dish.nameZh || '未指明菜品',
                                     nameOrig: dish.nameOrig || '',
-                                    priceOriginal: Number(dish.priceOriginal) || 0,
+                                    priceOriginal: isNaN(cleanPrice) ? 0 : cleanPrice,
                                     specifications: dish.specifications || ['常规'],
                                     selectedSpec: (dish.specifications && dish.specifications.length) ? dish.specifications[0] : '常规',
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
@@ -395,9 +402,13 @@ createApp({
             reader.readAsDataURL(compressedFile);
         };
 
-        const convertPrice = (priceOrig) => ((priceOrig / rates[origCurrency.value]) * rates[targetCurrency.value]).toFixed(2);
+        // 安全转换公式：加入兜底系数防止 NaN 污染 UI
+        const convertPrice = (priceOrig) => {
+            const rOrig = rates[origCurrency.value] || 1;
+            const rTarget = rates[targetCurrency.value] || 1;
+            return ((priceOrig / rOrig) * rTarget).toFixed(2);
+        };
 
-        // 完美实现模糊语意搜索（增加搜索 category 和 keywords 字段）
         const filteredMenu = computed(() => {
             if (!searchQuery.value.trim()) return formattedMenu.value;
             const q = searchQuery.value.toLowerCase();
@@ -422,25 +433,19 @@ createApp({
             return '其它';
         };
 
-        // 加入 AI 推荐首置逻辑
         const groupedMenu = computed(() => {
             const groups = {};
             const signatures = [];
 
             filteredMenu.value.forEach(d => {
-                if (d.isSignature) signatures.push(d); // 收集招牌菜
+                if (d.isSignature) signatures.push(d); 
                 const cat = getChineseCategory(d.nameZh);
                 if (!groups[cat]) groups[cat] = [];
                 groups[cat].push(d);
             });
             
             const result = [];
-            
-            // 只要有特色菜，就把推荐栏放在绝对的第一位
-            if (signatures.length > 0) {
-                result.push({ name: '🔥 AI推荐', dishes: signatures });
-            }
-
+            if (signatures.length > 0) result.push({ name: '🔥 AI推荐', dishes: signatures });
             Object.keys(groups).sort().forEach(cat => result.push({ name: cat, dishes: groups[cat] }));
             return result;
         });
@@ -450,6 +455,7 @@ createApp({
             return found ? found.dishes : [];
         });
 
+        // 购物车增删与强响应式
         const getCartQty = (id, spec) => {
             const found = cart.value.find(i => i.id === id && i.selectedSpec === spec);
             return found ? found.qty : 0;
@@ -458,7 +464,11 @@ createApp({
         const addToCart = (dish, specificSpec = null) => {
             const targetSpec = specificSpec || dish.selectedSpec;
             const found = cart.value.find(i => i.id === dish.id && i.selectedSpec === targetSpec);
-            if (found) found.qty++; else cart.value.push({ ...dish, selectedSpec: targetSpec, qty: 1 });
+            if (found) {
+                found.qty++;
+            } else {
+                cart.value.push({ ...dish, selectedSpec: targetSpec, qty: 1 });
+            }
         };
 
         const removeFromCart = (id, spec) => {
@@ -470,26 +480,28 @@ createApp({
         };
 
         const cartTotalQty = computed(() => cart.value.reduce((sum, i) => sum + i.qty, 0));
-        const cartTotalPrice = computed(() => cart.value.reduce((sum, item) => sum + (Number(convertPrice(item.priceOriginal)) * item.qty), 0).toFixed(2));
+        const cartTotalPrice = computed(() => {
+            return cart.value.reduce((sum, item) => sum + (Number(convertPrice(item.priceOriginal)) * item.qty), 0).toFixed(2);
+        });
 
         const saveCurrentMenu = () => {
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v5') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v6') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v5', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v6', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v5') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v6') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v5', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v6', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];

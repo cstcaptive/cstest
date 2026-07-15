@@ -41,20 +41,20 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 }
             })
         
-        # 优化提示词：加入 keywords 实现模糊搜索，加入 isSignature 恢复 AI 推荐
+        # 优化提示词：严厉要求提取真实规格，并限制价格格式防错
         content_list.append({
             "type": "text",
             "text": (
                 "提取图片中的菜品并翻译为中文，输出严格的JSON，勿包含Markdown格式：\n"
                 "{\n"
-                "  \"detectedCurrency\": \"货币代码如 USD, CNY\",\n"
+                "  \"detectedCurrency\": \"货币代码如 USD, CNY, TWD\",\n"
                 "  \"menu\": {\n"
                 "    \"分类名(如:饭类,面食,汤羹,海鲜,肉类,饮料)\": [\n"
                 "      {\n"
                 "        \"nameOrig\": \"原文\",\n"
                 "        \"nameZh\": \"中文名\",\n"
-                "        \"priceOriginal\": 数字,\n"
-                "        \"specifications\": [\"常规\"],\n"
+                "        \"priceOriginal\": 纯数字(绝对不要包含货币符号或逗号，如 6.5),\n"
+                "        \"specifications\": [\"(请务必提取菜单上该菜品真实的规格/份量/冷热/口味选项，例如 大份/小份、Hot/Iced，若完全没有写则输出 [\"常规\"])\"],\n"
                 "        \"isSignature\": 布尔值(判断是否为招牌/特色菜/推荐菜),\n"
                 "        \"keywords\": \"关联食材或语意(如:海鲜,微辣,牛肉)\"\n"
                 "      }\n"
