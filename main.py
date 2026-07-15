@@ -41,22 +41,22 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 }
             })
         
-        # 优化提示词：严厉要求提取真实规格，并限制价格格式防错
+        # 优化提示词：给大模型下达明确的规格提取硬指标
         content_list.append({
             "type": "text",
             "text": (
-                "提取图片中的菜品并翻译为中文，输出严格的JSON，勿包含Markdown格式：\n"
+                "仔细分析菜单图片，提取所有菜品并翻译为中文。输出严格的JSON，勿包含Markdown格式：\n"
                 "{\n"
-                "  \"detectedCurrency\": \"货币代码如 USD, CNY, TWD\",\n"
+                "  \"detectedCurrency\": \"货币代码如 USD, CNY, TWD, GBP\",\n"
                 "  \"menu\": {\n"
                 "    \"分类名(如:饭类,面食,汤羹,海鲜,肉类,饮料)\": [\n"
                 "      {\n"
-                "        \"nameOrig\": \"原文\",\n"
-                "        \"nameZh\": \"中文名\",\n"
-                "        \"priceOriginal\": 纯数字(绝对不要包含货币符号或逗号，如 6.5),\n"
-                "        \"specifications\": [\"(请务必提取菜单上该菜品真实的规格/份量/冷热/口味选项，例如 大份/小份、Hot/Iced，若完全没有写则输出 [\"常规\"])\"],\n"
-                "        \"isSignature\": 布尔值(判断是否为招牌/特色菜/推荐菜),\n"
-                "        \"keywords\": \"关联食材或语意(如:海鲜,微辣,牛肉)\"\n"
+                "        \"nameOrig\": \"原文菜名\",\n"
+                "        \"nameZh\": \"中文翻译菜名\",\n"
+                "        \"priceOriginal\": 纯数字原价(例如 6.5),\n"
+                "        \"specifications\": [\"必须从菜单提取真实存在的规格、份量或冷热选项，例如: \\\"小份\\\", \\\"大份\\\" 或 \\\"Hot\\\", \\\"Iced\\\"。若无多规格则填 \\\"常规\\\"] ,\n"
+                "        \"isSignature\": 布尔值(是否为招牌/特色菜),\n"
+                "        \"keywords\": \"食材或语意关键词(如:海鲜,微辣)\"\n"
                 "      }\n"
                 "    ]\n"
                 "  }\n"
@@ -68,7 +68,7 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": "你是一个极速 JSON 解析器，只输出要求的核心字段，不要多余废话。"},
+                {"role": "system", "content": "你是一个高精度菜单结构化解析器，必须精准提取菜单上的多重规格选项。"},
                 {"role": "user", "content": content_list}
             ]
         )

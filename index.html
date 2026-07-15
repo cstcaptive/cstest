@@ -58,7 +58,7 @@
 
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
         <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs">正在极速解析菜单...</p>
+        <p class="text-xs">正在极速解析菜单与菜品规格...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
@@ -86,8 +86,9 @@
                     </div>
                     <p class="text-xs text-gray-400 truncate">{{ dish.nameOrig }}</p>
                     
+                    <!-- 多规格选择按钮 -->
                     <div class="flex flex-wrap gap-1 my-1" v-if="dish.specifications && dish.specifications.length">
-                        <button v-for="spec in dish.specifications" :key="spec" @click="dish.selectedSpec = spec" class="text-[10px] px-2 py-0.5 rounded border transition" :class="dish.selectedSpec === spec ? 'bg-gray-800 text-white border-gray-800' : 'bg-gray-50 text-gray-500 border-gray-200'">
+                        <button v-for="spec in dish.specifications" :key="spec" @click="dish.selectedSpec = spec" class="text-[10px] px-2 py-0.5 rounded border transition" :class="dish.selectedSpec === spec ? 'bg-gray-800 text-white border-gray-800 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'">
                             {{ spec }}
                         </button>
                     </div>
@@ -112,7 +113,7 @@
         </div>
     </main>
 
-    <!-- 底部结算快捷栏（实时修复总金额显示） -->
+    <!-- 底部结算快捷栏（实时显示已选件数与精确总金额） -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
@@ -360,14 +361,22 @@ createApp({
                             val.forEach((dish) => {
                                 let cleanPrice = parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, ''));
                                 
+                                // 规范规格数组提取
+                                let rawSpecs = dish.specifications;
+                                let parsedSpecs = ['常规'];
+                                if (Array.isArray(rawSpecs) && rawSpecs.length > 0) {
+                                    parsedSpecs = rawSpecs.map(s => String(s).trim()).filter(Boolean);
+                                    if (parsedSpecs.length === 0) parsedSpecs = ['常规'];
+                                }
+
                                 newMenu.push({
                                     id: 'd_' + Date.now() + '_' + idx++,
                                     category: catKey,
                                     nameZh: dish.nameZh || '未指明菜品',
                                     nameOrig: dish.nameOrig || '',
                                     priceOriginal: isNaN(cleanPrice) ? 0 : cleanPrice,
-                                    specifications: (dish.specifications && dish.specifications.length > 0) ? dish.specifications : ['常规'],
-                                    selectedSpec: (dish.specifications && dish.specifications.length > 0) ? dish.specifications[0] : '常规',
+                                    specifications: parsedSpecs,
+                                    selectedSpec: parsedSpecs[0],
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
                                     isSignature: !!dish.isSignature,
                                     keywords: dish.keywords || '',
@@ -402,9 +411,10 @@ createApp({
         };
 
         const convertPrice = (priceOrig) => {
+            const num = Number(priceOrig) || 0;
             const rOrig = rates[origCurrency.value] || 1;
             const rTarget = rates[targetCurrency.value] || 1;
-            return ((priceOrig / rOrig) * rTarget).toFixed(2);
+            return ((num / rOrig) * rTarget).toFixed(2);
         };
 
         const filteredMenu = computed(() => {
@@ -448,7 +458,6 @@ createApp({
             return result;
         });
 
-        // 联动修复：当搜索框发生变化或分类变化时，自动将 activeCategory 矫正到有结果的第一个标签
         watch(searchQuery, (newVal) => {
             if (newVal.trim() && groupedMenu.value.length > 0) {
                 activeCategory.value = groupedMenu.value[0].name;
@@ -457,7 +466,6 @@ createApp({
 
         const currentCategoryDishes = computed(() => {
             const found = groupedMenu.value.find(c => c.name === activeCategory.value);
-            // 如果当前选中的标签在搜索后不存在了，自动兜底切到第一个
             if (!found && groupedMenu.value.length > 0) {
                 activeCategory.value = groupedMenu.value[0].name;
                 return groupedMenu.value[0].dishes;
@@ -489,28 +497,35 @@ createApp({
         };
 
         const cartTotalQty = computed(() => cart.value.reduce((sum, i) => sum + i.qty, 0));
+        
+        // 强健的购物车总金额计算防错
         const cartTotalPrice = computed(() => {
-            return cart.value.reduce((sum, item) => sum + (Number(convertPrice(item.priceOriginal)) * item.qty), 0).toFixed(2);
+            let total = 0;
+            cart.value.forEach(item => {
+                const singlePrice = Number(convertPrice(item.priceOriginal)) || 0;
+                total += singlePrice * (Number(item.qty) || 0);
+            });
+            return total.toFixed(2);
         });
 
         const saveCurrentMenu = () => {
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v7') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v8') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v7', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v8', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v7') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v8') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v7', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v8', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
@@ -558,7 +573,8 @@ createApp({
             getCartQty, addToCart, removeFromCart, saveCurrentMenu, openLoadModal, showLoadModal, savedMenusList,
             loadSavedMenu, deleteSavedMenu, viewDishPhotos, photoViewer,
             invoiceMeta, generateImageInvoice, renderedInvoiceImg, activeCategory, currentCategoryDishes,
-            showReviewModal, openReviewModal, closeReviewModal, reviewTarget, handleReviewPhotoUpload
+            showReviewModal, openReviewModal, closeReviewModal, reviewTarget, handleReviewPhotoUpload,
+            cartTotalQty, cartTotalPrice
         };
     }
 }).mount('#app');
