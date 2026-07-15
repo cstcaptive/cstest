@@ -58,13 +58,14 @@
 
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
         <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs">正在极速解析菜单并提取规格...</p>
+        <p class="text-xs">正在极速解析菜单...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
-        <p class="text-xs">暂无菜单数据，请点击「拍菜单」导入图片。</p>
+        <p class="text-xs">暂无匹配的菜品数据。</p>
     </div>
 
+    <!-- 菜品列表 -->
     <main v-else class="flex-1 p-3 space-y-3 overflow-y-auto">
         <div v-for="dish in currentCategoryDishes" :key="dish.id" class="flex gap-3 bg-white border border-gray-100 p-3 rounded shadow-sm">
             
@@ -111,11 +112,11 @@
         </div>
     </main>
 
-    <!-- 底部结算快捷栏 -->
+    <!-- 底部结算快捷栏（实时修复总金额显示） -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
-            <p class="text-base font-bold text-gray-900">总计: {{ currencyMap[targetCurrency] }}{{ cartTotalPrice }}</p>
+            <p class="text-base font-bold text-gray-900">总计: <span class="text-rose-600">{{ currencyMap[targetCurrency] }}{{ cartTotalPrice }}</span></p>
         </div>
         <button @click="openInvoiceModal" :disabled="cartTotalQty === 0" 
                 :class="cartTotalQty === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-900 text-white hover:bg-gray-800'" 
@@ -266,7 +267,7 @@
 </div>
 
 <script>
-const { createApp, ref, computed } = Vue;
+const { createApp, ref, computed, watch } = Vue;
 
 createApp({
     setup() {
@@ -287,7 +288,6 @@ createApp({
 
         const origCurrency = ref('USD');
         const targetCurrency = ref('CNY');
-        // 加入更广泛的货币映射防错
         const currencyMap = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'THB': '฿', 'TWD': 'NT$', 'HKD': 'HK$' };
         const rates = { 'CNY': 7.25, 'USD': 1.0, 'EUR': 0.92, 'GBP': 0.79, 'JPY': 155.0, 'THB': 36.5, 'TWD': 32.5, 'HKD': 7.8 };
 
@@ -349,7 +349,7 @@ createApp({
                         origCurrency.value = parsedData.detectedCurrency;
                         isAiAutoDetected.value = true;
                     } else {
-                        origCurrency.value = 'CNY'; // 兜底防止货币代码异常
+                        origCurrency.value = 'CNY';
                     }
                     
                     let newMenu = [];
@@ -358,7 +358,6 @@ createApp({
                         const val = parsedData.menu[catKey];
                         if (Array.isArray(val)) {
                             val.forEach((dish) => {
-                                // 价格安全清洗，过滤掉乱七八糟的逗号或字母
                                 let cleanPrice = parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, ''));
                                 
                                 newMenu.push({
@@ -367,8 +366,8 @@ createApp({
                                     nameZh: dish.nameZh || '未指明菜品',
                                     nameOrig: dish.nameOrig || '',
                                     priceOriginal: isNaN(cleanPrice) ? 0 : cleanPrice,
-                                    specifications: dish.specifications || ['常规'],
-                                    selectedSpec: (dish.specifications && dish.specifications.length) ? dish.specifications[0] : '常规',
+                                    specifications: (dish.specifications && dish.specifications.length > 0) ? dish.specifications : ['常规'],
+                                    selectedSpec: (dish.specifications && dish.specifications.length > 0) ? dish.specifications[0] : '常规',
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
                                     isSignature: !!dish.isSignature,
                                     keywords: dish.keywords || '',
@@ -402,7 +401,6 @@ createApp({
             reader.readAsDataURL(compressedFile);
         };
 
-        // 安全转换公式：加入兜底系数防止 NaN 污染 UI
         const convertPrice = (priceOrig) => {
             const rOrig = rates[origCurrency.value] || 1;
             const rTarget = rates[targetCurrency.value] || 1;
@@ -450,12 +448,23 @@ createApp({
             return result;
         });
 
+        // 联动修复：当搜索框发生变化或分类变化时，自动将 activeCategory 矫正到有结果的第一个标签
+        watch(searchQuery, (newVal) => {
+            if (newVal.trim() && groupedMenu.value.length > 0) {
+                activeCategory.value = groupedMenu.value[0].name;
+            }
+        });
+
         const currentCategoryDishes = computed(() => {
             const found = groupedMenu.value.find(c => c.name === activeCategory.value);
+            // 如果当前选中的标签在搜索后不存在了，自动兜底切到第一个
+            if (!found && groupedMenu.value.length > 0) {
+                activeCategory.value = groupedMenu.value[0].name;
+                return groupedMenu.value[0].dishes;
+            }
             return found ? found.dishes : [];
         });
 
-        // 购物车增删与强响应式
         const getCartQty = (id, spec) => {
             const found = cart.value.find(i => i.id === id && i.selectedSpec === spec);
             return found ? found.qty : 0;
@@ -488,20 +497,20 @@ createApp({
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v6') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v7') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v6', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v7', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v6') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v7') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v6', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v7', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
