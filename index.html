@@ -58,7 +58,7 @@
 
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
         <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs">正在极速解析菜单与菜品规格...</p>
+        <p class="text-xs">正在深度解析菜品多重规格与价格...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
@@ -86,25 +86,26 @@
                     </div>
                     <p class="text-xs text-gray-400 truncate">{{ dish.nameOrig }}</p>
                     
-                    <!-- 多规格选择按钮 -->
+                    <!-- 多规格选择按钮（联动切换对应价格） -->
                     <div class="flex flex-wrap gap-1 my-1" v-if="dish.specifications && dish.specifications.length">
-                        <button v-for="spec in dish.specifications" :key="spec" @click="dish.selectedSpec = spec" class="text-[10px] px-2 py-0.5 rounded border transition" :class="dish.selectedSpec === spec ? 'bg-gray-800 text-white border-gray-800 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'">
-                            {{ spec }}
+                        <button v-for="spec in dish.specifications" :key="spec.name" @click="dish.selectedSpec = spec" class="text-[10px] px-2 py-0.5 rounded border transition" :class="dish.selectedSpec.name === spec.name ? 'bg-gray-800 text-white border-gray-800 font-bold' : 'bg-gray-50 text-gray-500 border-gray-200'">
+                            {{ spec.name }} ({{ currencyMap[origCurrency] }}{{ spec.price }})
                         </button>
                     </div>
                 </div>
 
                 <div class="flex items-center justify-between mt-1">
                     <div class="flex items-baseline gap-2">
-                        <span class="text-sm font-bold text-gray-900">{{ currencyMap[targetCurrency] }}{{ convertPrice(dish.priceOriginal) }}</span>
-                        <span class="text-[10px] text-gray-400 line-through">{{ currencyMap[origCurrency] }}{{ dish.priceOriginal }}</span>
+                        <!-- 实时跟随选中规格渲染折算后价格 -->
+                        <span class="text-sm font-bold text-gray-900">{{ currencyMap[targetCurrency] }}{{ convertPrice(dish.selectedSpec.price) }}</span>
+                        <span class="text-[10px] text-gray-400 line-through">{{ currencyMap[origCurrency] }}{{ dish.selectedSpec.price }}</span>
                     </div>
                     
                     <div class="flex items-center gap-2">
                         <button @click="openReviewModal(dish)" class="text-[10px] text-gray-500 border px-2 py-0.5 rounded hover:bg-gray-50 transition">评价</button>
                         <div class="flex items-center border rounded">
-                            <button v-if="getCartQty(dish.id, dish.selectedSpec) > 0" @click="removeFromCart(dish.id, dish.selectedSpec)" class="w-6 h-6 flex items-center justify-center text-gray-600">-</button>
-                            <span v-if="getCartQty(dish.id, dish.selectedSpec) > 0" class="w-6 text-center text-xs font-medium text-gray-800">{{ getCartQty(dish.id, dish.selectedSpec) }}</span>
+                            <button v-if="getCartQty(dish.id, dish.selectedSpec.name) > 0" @click="removeFromCart(dish.id, dish.selectedSpec.name)" class="w-6 h-6 flex items-center justify-center text-gray-600">-</button>
+                            <span v-if="getCartQty(dish.id, dish.selectedSpec.name) > 0" class="w-6 text-center text-xs font-medium text-gray-800">{{ getCartQty(dish.id, dish.selectedSpec.name) }}</span>
                             <button @click="addToCart(dish)" class="w-6 h-6 flex items-center justify-center text-gray-600 bg-gray-50">+</button>
                         </div>
                     </div>
@@ -113,7 +114,7 @@
         </div>
     </main>
 
-    <!-- 底部结算快捷栏（实时强健渲染总金额） -->
+    <!-- 底部结算快捷栏 -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
@@ -157,7 +158,7 @@
         </div>
     </div>
 
-    <!-- 结算弹窗 -->
+    <!-- 结算弹窗 (区分同菜不同规格独立清单明细) -->
     <div v-if="showInvoiceModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex flex-col justify-end" @click.self="closeInvoiceModal">
         <div class="bg-white rounded-t max-h-[85vh] flex flex-col p-4 shadow-lg">
             <div class="flex justify-between items-center pb-2 border-b">
@@ -190,19 +191,19 @@
                 </div>
 
                 <div class="space-y-1.5">
-                    <p class="text-xs font-medium text-gray-500">消费明细</p>
+                    <p class="text-xs font-medium text-gray-500">消费明细 (同菜异规格独立区分)</p>
                     <div class="divide-y border rounded bg-white px-2">
-                        <div v-for="item in cart" :key="item.id + '_' + item.selectedSpec" class="py-2 flex justify-between text-xs">
+                        <div v-for="item in cart" :key="item.id + '_' + item.selectedSpecName" class="py-2 flex justify-between text-xs">
                             <div class="flex-1 pr-2">
-                                <p class="font-medium text-gray-900">{{ item.nameZh }} <span class="text-[10px] text-gray-500">({{ item.selectedSpec }})</span></p>
+                                <p class="font-medium text-gray-900">{{ item.nameZh }} <span class="text-[10px] text-rose-600 font-bold">[{{ item.selectedSpecName }}]</span></p>
                                 <p class="text-[10px] text-gray-400 truncate">{{ item.nameOrig }}</p>
                             </div>
                             <div class="flex flex-col items-end">
-                                <span class="font-bold">{{ currencyMap[targetCurrency] }}{{ (convertPrice(item.priceOriginal) * item.qty).toFixed(2) }}</span>
+                                <span class="font-bold">{{ currencyMap[targetCurrency] }}{{ (convertPrice(item.specPrice) * item.qty).toFixed(2) }}</span>
                                 <div class="flex items-center gap-2 mt-1">
-                                    <button @click="removeFromCart(item.id, item.selectedSpec)" class="text-gray-400 px-1 border rounded">-</button>
+                                    <button @click="removeFromCart(item.id, item.selectedSpecName)" class="text-gray-400 px-1 border rounded">-</button>
                                     <span class="text-[10px]">{{ item.qty }}</span>
-                                    <button @click="addToCart(item, item.selectedSpec)" class="text-gray-400 px-1 border rounded">+</button>
+                                    <button @click="addToCartSpec(item)" class="text-gray-400 px-1 border rounded">+</button>
                                 </div>
                             </div>
                         </div>
@@ -359,14 +360,19 @@ createApp({
                         const val = parsedData.menu[catKey];
                         if (Array.isArray(val)) {
                             val.forEach((dish) => {
-                                let cleanPrice = parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, ''));
-                                
-                                // 规范规格数组提取
+                                // 规范解析带价格的规格数组
                                 let rawSpecs = dish.specifications;
-                                let parsedSpecs = ['常规'];
+                                let parsedSpecs = [{ name: '常规', price: parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, '')) || 0 }];
+                                
                                 if (Array.isArray(rawSpecs) && rawSpecs.length > 0) {
-                                    parsedSpecs = rawSpecs.map(s => String(s).trim()).filter(Boolean);
-                                    if (parsedSpecs.length === 0) parsedSpecs = ['常规'];
+                                    parsedSpecs = rawSpecs.map(s => {
+                                        let sName = String(s.specName || s.name || '常规').trim();
+                                        let sPrice = parseFloat(String(s.price).replace(/[^\d.-]/g, ''));
+                                        return {
+                                            name: sName,
+                                            price: isNaN(sPrice) ? (parseFloat(String(dish.priceOriginal).replace(/[^\d.-]/g, '')) || 0) : sPrice
+                                        };
+                                    });
                                 }
 
                                 newMenu.push({
@@ -374,9 +380,8 @@ createApp({
                                     category: catKey,
                                     nameZh: dish.nameZh || '未指明菜品',
                                     nameOrig: dish.nameOrig || '',
-                                    priceOriginal: isNaN(cleanPrice) ? 0 : cleanPrice,
                                     specifications: parsedSpecs,
-                                    selectedSpec: parsedSpecs[0],
+                                    selectedSpec: parsedSpecs[0], // 默认选中第一个规格及对应价格
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
                                     isSignature: !!dish.isSignature,
                                     keywords: dish.keywords || '',
@@ -473,48 +478,58 @@ createApp({
             return found ? found.dishes : [];
         });
 
-        const getCartQty = (id, spec) => {
-            const found = cart.value.find(i => i.id === id && i.selectedSpec === spec);
+        // 购物车管理：以 dish.id + spec.name 作为唯一复合主键，实现同菜异规格完全隔离、独立区分！
+        const getCartQty = (id, specName) => {
+            const found = cart.value.find(i => i.id === id && i.selectedSpecName === specName);
             return found ? found.qty : 0;
         };
 
-        const addToCart = (dish, specificSpec = null) => {
-            const targetSpec = specificSpec || dish.selectedSpec;
-            const found = cart.value.find(i => i.id === dish.id && i.selectedSpec === targetSpec);
+        const addToCart = (dish) => {
+            const spec = dish.selectedSpec; // 当前选中的规格对象 { name, price }
+            const found = cart.value.find(i => i.id === dish.id && i.selectedSpecName === spec.name);
             if (found) {
                 found.qty++;
             } else {
-                cart.value.push({ ...dish, selectedSpec: targetSpec, qty: 1 });
+                cart.value.push({
+                    id: dish.id,
+                    nameZh: dish.nameZh,
+                    nameOrig: dish.nameOrig,
+                    selectedSpecName: spec.name,
+                    specPrice: spec.price,
+                    qty: 1
+                });
             }
         };
 
-        const removeFromCart = (id, spec) => {
-            const idx = cart.value.findIndex(i => i.id === id && i.selectedSpec === spec);
+        const addToCartSpec = (item) => {
+            const found = cart.value.find(i => i.id === item.id && i.selectedSpecName === item.selectedSpecName);
+            if (found) found.qty++;
+        };
+
+        const removeFromCart = (id, specName) => {
+            const idx = cart.value.findIndex(i => i.id === id && i.selectedSpecName === specName);
             if (idx > -1) {
                 cart.value[idx].qty--;
                 if (cart.value[idx].qty <= 0) cart.value.splice(idx, 1);
             }
         };
 
-        // 强健的购物车总数量与总金额计算，彻底杜绝空白与 NaN
         const cartTotalQty = computed(() => {
             let sum = 0;
             if (Array.isArray(cart.value)) {
-                cart.value.forEach(item => {
-                    sum += Number(item.qty) || 0;
-                });
+                cart.value.forEach(item => { sum += Number(item.qty) || 0; });
             }
             return sum;
         });
-
+        
+        // 实时强健的总金额计算
         const cartTotalPrice = computed(() => {
             let total = 0;
             if (Array.isArray(cart.value)) {
                 cart.value.forEach(item => {
-                    const p = Number(item.priceOriginal) || 0;
-                    const converted = Number(convertPrice(p)) || 0;
+                    const priceConverted = Number(convertPrice(item.specPrice)) || 0;
                     const q = Number(item.qty) || 0;
-                    total += converted * q;
+                    total += priceConverted * q;
                 });
             }
             return total.toFixed(2);
@@ -524,20 +539,20 @@ createApp({
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v9') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v10') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v9', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v10', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v9') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v10') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v9', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v10', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
@@ -559,8 +574,8 @@ createApp({
 
             let y = 130;
             cart.value.forEach(item => {
-                ctx.fillStyle = '#111'; ctx.font = '12px sans-serif'; ctx.fillText(`${item.nameZh} (${item.selectedSpec})`, 20, y);
-                ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${(convertPrice(item.priceOriginal) * item.qty).toFixed(2)}`, 380, y);
+                ctx.fillStyle = '#111'; ctx.font = '12px sans-serif'; ctx.fillText(`${item.nameZh} [${item.selectedSpecName}]`, 20, y);
+                ctx.textAlign = 'right'; ctx.fillText(`${currencyMap[targetCurrency.value]}${(convertPrice(item.specPrice) * item.qty).toFixed(2)}`, 380, y);
                 ctx.textAlign = 'left'; ctx.fillStyle = '#888'; ctx.font = '10px monospace'; ctx.fillText(`x${item.qty}`, 20, y + 15);
                 y += 40;
             });
@@ -582,7 +597,7 @@ createApp({
             isLoading, searchQuery, formattedMenu, sourceImages, cart, isAiAutoDetected,
             showInvoiceModal, openInvoiceModal, closeInvoiceModal, triggerUpload, handleFileUpload, fileInput,
             origCurrency, targetCurrency, currencyMap, convertPrice, rates, filteredMenu, groupedMenu,
-            getCartQty, addToCart, removeFromCart, saveCurrentMenu, openLoadModal, showLoadModal, savedMenusList,
+            getCartQty, addToCart, addToCartSpec, removeFromCart, saveCurrentMenu, openLoadModal, showLoadModal, savedMenusList,
             loadSavedMenu, deleteSavedMenu, viewDishPhotos, photoViewer,
             invoiceMeta, generateImageInvoice, renderedInvoiceImg, activeCategory, currentCategoryDishes,
             showReviewModal, openReviewModal, closeReviewModal, reviewTarget, handleReviewPhotoUpload,
