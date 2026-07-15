@@ -41,7 +41,7 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 }
             })
         
-        # 极简提示词，大幅缩短 AI 生成 Token 的时间，提升速度
+        # 优化提示词：加入 keywords 实现模糊搜索，加入 isSignature 恢复 AI 推荐
         content_list.append({
             "type": "text",
             "text": (
@@ -54,7 +54,9 @@ async def parse_menu_files(files: List[UploadFile] = File(...)):
                 "        \"nameOrig\": \"原文\",\n"
                 "        \"nameZh\": \"中文名\",\n"
                 "        \"priceOriginal\": 数字,\n"
-                "        \"specifications\": [\"常规\"]\n"
+                "        \"specifications\": [\"常规\"],\n"
+                "        \"isSignature\": 布尔值(判断是否为招牌/特色菜/推荐菜),\n"
+                "        \"keywords\": \"关联食材或语意(如:海鲜,微辣,牛肉)\"\n"
                 "      }\n"
                 "    ]\n"
                 "  }\n"

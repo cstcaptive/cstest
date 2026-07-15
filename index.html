@@ -15,7 +15,6 @@
 
 <div id="app" v-cloak class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col relative pb-28">
     
-    <!-- 顶栏头部 -->
     <header class="bg-white border-b sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
         <h1 class="text-lg font-bold tracking-wide">智能点菜系统</h1>
         <div class="flex items-center gap-3">
@@ -28,7 +27,6 @@
         </div>
     </header>
 
-    <!-- 货币汇率转换栏 -->
     <div class="bg-gray-100 border-b px-4 py-2 flex items-center justify-between text-xs sticky top-[53px] z-30">
         <div class="flex items-center gap-2">
             <span class="text-gray-500">原币</span>
@@ -45,46 +43,44 @@
         </div>
     </div>
 
-    <!-- 全局搜索 -->
     <div class="p-3 bg-white border-b">
-        <input type="text" v-model="searchQuery" placeholder="搜索菜名或原料..." class="w-full bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-gray-400 transition">
+        <input type="text" v-model="searchQuery" placeholder="搜索菜名、食材(如:海鲜)或口味..." class="w-full bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm outline-none focus:border-gray-400 transition">
     </div>
 
-    <!-- 顶部智能分类标签页 -->
-    <div v-if="groupedMenu.length > 0" class="bg-white border-b sticky top-[133px] z-20 overflow-x-auto whitespace-nowrap p-2 flex gap-2 hide-scrollbar">
+    <!-- 顶部智能分类标签页 (包含 AI 推荐) -->
+    <div v-if="groupedMenu.length > 0" class="bg-white border-b sticky top-[133px] z-20 overflow-x-auto whitespace-nowrap p-2 flex gap-2 hide-scrollbar shadow-sm">
         <button v-for="category in groupedMenu" :key="category.name" @click="activeCategory = category.name"
-                :class="activeCategory === category.name ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-                class="px-4 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0">
+                :class="activeCategory === category.name ? 'bg-gray-900 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                class="px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex-shrink-0">
             {{ category.name }}
         </button>
     </div>
 
-    <!-- 加载与空状态 -->
     <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-400">
         <div class="w-6 h-6 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs">正在极速解析菜单数据...</p>
+        <p class="text-xs">正在极速解析菜单与提取招牌菜...</p>
     </div>
 
     <div v-else-if="filteredMenu.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-center text-gray-400">
         <p class="text-xs">暂无菜单数据，请点击「拍菜单」导入图片。</p>
     </div>
 
-    <!-- 独立标签页菜品列表 -->
     <main v-else class="flex-1 p-3 space-y-3 overflow-y-auto">
         <div v-for="dish in currentCategoryDishes" :key="dish.id" class="flex gap-3 bg-white border border-gray-100 p-3 rounded shadow-sm">
             
-            <!-- 缩略图 -->
             <div @click="viewDishPhotos(dish)" class="w-16 h-16 rounded overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 relative group cursor-pointer">
                 <img v-if="dish.customPhotos && dish.customPhotos.length" :src="dish.customPhotos[0]" class="w-full h-full object-cover">
                 <img v-else-if="sourceImages[dish.sourceImageIdx]" :src="sourceImages[dish.sourceImageIdx]" class="w-full h-full object-cover">
-                <div v-else class="w-full h-full flex items-center justify-center text-xs text-gray-400">暂无图片</div>
+                <div v-else class="w-full h-full flex items-center justify-center text-xs text-gray-400">无图</div>
             </div>
 
-            <!-- 菜品详情 -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
                 <div>
                     <div class="flex items-start justify-between gap-1">
-                        <h3 class="font-bold text-gray-900 text-sm truncate">{{ dish.nameZh }}</h3>
+                        <div class="flex items-center gap-1.5 overflow-hidden">
+                            <h3 class="font-bold text-gray-900 text-sm truncate">{{ dish.nameZh }}</h3>
+                            <span v-if="dish.isSignature" class="bg-red-50 text-red-600 border border-red-100 px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0">招牌</span>
+                        </div>
                         <span class="text-xs font-medium text-gray-500" v-if="dish.rating > 0">{{ dish.rating }}★</span>
                     </div>
                     <p class="text-xs text-gray-400 truncate">{{ dish.nameOrig }}</p>
@@ -115,7 +111,6 @@
         </div>
     </main>
 
-    <!-- 底部结算快捷栏 -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
@@ -128,7 +123,7 @@
         </button>
     </div>
 
-    <!-- 独立评价弹窗 -->
+    <!-- 评价弹窗 -->
     <div v-if="showReviewModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex items-center justify-center p-4" @click.self="closeReviewModal">
         <div class="bg-white rounded w-full p-4 shadow-lg space-y-4">
             <div class="flex justify-between items-center border-b pb-2">
@@ -159,7 +154,7 @@
         </div>
     </div>
 
-    <!-- 结算清单与发票生成弹窗 -->
+    <!-- 结算弹窗 -->
     <div v-if="showInvoiceModal" class="fixed inset-0 z-50 max-w-md mx-auto bg-black/50 flex flex-col justify-end" @click.self="closeInvoiceModal">
         <div class="bg-white rounded-t max-h-[85vh] flex flex-col p-4 shadow-lg">
             <div class="flex justify-between items-center pb-2 border-b">
@@ -304,7 +299,6 @@ createApp({
         const fileInput = ref(null);
         const triggerUpload = () => fileInput.value.click();
 
-        // 核心提速黑科技：前端纯 JS 毫秒级压缩图片
         const compressImage = (file, maxWidth = 1024) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -313,17 +307,11 @@ createApp({
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
                         let w = img.width, h = img.height;
-                        if (w > maxWidth) {
-                            h = Math.round((h * maxWidth) / w);
-                            w = maxWidth;
-                        }
-                        canvas.width = w;
-                        canvas.height = h;
+                        if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+                        canvas.width = w; canvas.height = h;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
-                        canvas.toBlob((blob) => {
-                            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                        }, 'image/jpeg', 0.7); // 质量压缩至 0.7，极大地减小体积
+                        canvas.toBlob((blob) => { resolve(new File([blob], file.name, { type: 'image/jpeg' })); }, 'image/jpeg', 0.7);
                     };
                     img.src = e.target.result;
                 };
@@ -340,12 +328,9 @@ createApp({
             sourceImages.value = [];
 
             for (let i = 0; i < files.length; i++) {
-                // 读取原图做本地对比使用
                 const localReader = new FileReader();
                 localReader.onload = (e) => { sourceImages.value.push(e.target.result); };
                 localReader.readAsDataURL(files[i]);
-
-                // 压缩图片后上传，速度直接起飞
                 const compressedFile = await compressImage(files[i]);
                 formData.append('files', compressedFile);
             }
@@ -378,6 +363,8 @@ createApp({
                                     specifications: dish.specifications || ['常规'],
                                     selectedSpec: (dish.specifications && dish.specifications.length) ? dish.specifications[0] : '常规',
                                     sourceImageIdx: dish.sourceImageIdx !== undefined ? dish.sourceImageIdx : 0,
+                                    isSignature: !!dish.isSignature,
+                                    keywords: dish.keywords || '',
                                     rating: 0, 
                                     customPhotos: [] 
                                 });
@@ -402,22 +389,24 @@ createApp({
         const handleReviewPhotoUpload = async (event) => {
             const file = event.target.files[0];
             if (!file || !reviewTarget.value) return;
-            
-            // 同样采用压缩提升前端内存体验
             const compressedFile = await compressImage(file, 800);
             const reader = new FileReader();
-            reader.onload = (e) => {
-                reviewTarget.value.customPhotos.unshift(e.target.result);
-            };
+            reader.onload = (e) => { reviewTarget.value.customPhotos.unshift(e.target.result); };
             reader.readAsDataURL(compressedFile);
         };
 
         const convertPrice = (priceOrig) => ((priceOrig / rates[origCurrency.value]) * rates[targetCurrency.value]).toFixed(2);
 
+        // 完美实现模糊语意搜索（增加搜索 category 和 keywords 字段）
         const filteredMenu = computed(() => {
             if (!searchQuery.value.trim()) return formattedMenu.value;
             const q = searchQuery.value.toLowerCase();
-            return formattedMenu.value.filter(d => d.nameZh.toLowerCase().includes(q) || d.nameOrig.toLowerCase().includes(q));
+            return formattedMenu.value.filter(d => 
+                d.nameZh.toLowerCase().includes(q) || 
+                d.nameOrig.toLowerCase().includes(q) ||
+                d.category.toLowerCase().includes(q) ||
+                (d.keywords && d.keywords.toLowerCase().includes(q))
+            );
         });
 
         const getChineseCategory = (nameZh) => {
@@ -433,14 +422,25 @@ createApp({
             return '其它';
         };
 
+        // 加入 AI 推荐首置逻辑
         const groupedMenu = computed(() => {
             const groups = {};
+            const signatures = [];
+
             filteredMenu.value.forEach(d => {
+                if (d.isSignature) signatures.push(d); // 收集招牌菜
                 const cat = getChineseCategory(d.nameZh);
                 if (!groups[cat]) groups[cat] = [];
                 groups[cat].push(d);
             });
+            
             const result = [];
+            
+            // 只要有特色菜，就把推荐栏放在绝对的第一位
+            if (signatures.length > 0) {
+                result.push({ name: '🔥 AI推荐', dishes: signatures });
+            }
+
             Object.keys(groups).sort().forEach(cat => result.push({ name: cat, dishes: groups[cat] }));
             return result;
         });
@@ -476,20 +476,20 @@ createApp({
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v4') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v5') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v4', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v5', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v4') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v5') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v4', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v5', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
