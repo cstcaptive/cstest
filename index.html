@@ -113,7 +113,7 @@
         </div>
     </main>
 
-    <!-- 底部结算快捷栏（实时显示已选件数与精确总金额） -->
+    <!-- 底部结算快捷栏（实时强健渲染总金额） -->
     <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-3 shadow-lg flex items-center justify-between z-40">
         <div @click="openInvoiceModal" class="flex flex-col cursor-pointer">
             <p class="text-xs text-gray-500">已选 {{ cartTotalQty }} 份菜品</p>
@@ -496,15 +496,27 @@ createApp({
             }
         };
 
-        const cartTotalQty = computed(() => cart.value.reduce((sum, i) => sum + i.qty, 0));
-        
-        // 强健的购物车总金额计算防错
+        // 强健的购物车总数量与总金额计算，彻底杜绝空白与 NaN
+        const cartTotalQty = computed(() => {
+            let sum = 0;
+            if (Array.isArray(cart.value)) {
+                cart.value.forEach(item => {
+                    sum += Number(item.qty) || 0;
+                });
+            }
+            return sum;
+        });
+
         const cartTotalPrice = computed(() => {
             let total = 0;
-            cart.value.forEach(item => {
-                const singlePrice = Number(convertPrice(item.priceOriginal)) || 0;
-                total += singlePrice * (Number(item.qty) || 0);
-            });
+            if (Array.isArray(cart.value)) {
+                cart.value.forEach(item => {
+                    const p = Number(item.priceOriginal) || 0;
+                    const converted = Number(convertPrice(p)) || 0;
+                    const q = Number(item.qty) || 0;
+                    total += converted * q;
+                });
+            }
             return total.toFixed(2);
         });
 
@@ -512,20 +524,20 @@ createApp({
             if (!formattedMenu.value.length) return alert("无可保存内容");
             const name = prompt("存档名称:", "菜单-" + new Date().toLocaleDateString());
             if (!name) return;
-            const history = JSON.parse(localStorage.getItem('menu_storage_v8') || '[]');
+            const history = JSON.parse(localStorage.getItem('menu_storage_v9') || '[]');
             history.unshift({ name, time: new Date().toLocaleString(), formattedMenu: formattedMenu.value, sourceImages: sourceImages.value, origCurrency: origCurrency.value, targetCurrency: targetCurrency.value });
-            localStorage.setItem('menu_storage_v8', JSON.stringify(history));
+            localStorage.setItem('menu_storage_v9', JSON.stringify(history));
             alert("保存成功！");
         };
 
-        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v8') || '[]'); showLoadModal.value = true; };
+        const openLoadModal = () => { savedMenusList.value = JSON.parse(localStorage.getItem('menu_storage_v9') || '[]'); showLoadModal.value = true; };
         const loadSavedMenu = (index) => {
             const t = savedMenusList.value[index];
             formattedMenu.value = t.formattedMenu; sourceImages.value = t.sourceImages || []; origCurrency.value = t.origCurrency; targetCurrency.value = t.targetCurrency;
             cart.value = []; showLoadModal.value = false;
             if (groupedMenu.value.length > 0) activeCategory.value = groupedMenu.value[0].name;
         };
-        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v8', JSON.stringify(savedMenusList.value)); } };
+        const deleteSavedMenu = (index) => { if(confirm("删除此记录？")){ savedMenusList.value.splice(index, 1); localStorage.setItem('menu_storage_v9', JSON.stringify(savedMenusList.value)); } };
 
         const viewDishPhotos = (dish) => {
             const list = [];
